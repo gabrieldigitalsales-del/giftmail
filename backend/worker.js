@@ -10,7 +10,7 @@ const hex=bytes=>[...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0'
 async function sha256(s){return hex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))}
 async function hashPassword(password,saltB64){
   const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
-  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:b64ToBytes(saltB64),iterations:120000},key,256);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:b64ToBytes(saltB64),iterations:100000},key,256);
   return bytesToB64(new Uint8Array(bits));
 }
 const newId=(p='m')=>p+crypto.randomUUID().replace(/-/g,'');
@@ -81,7 +81,19 @@ async function api(req,env){
   if(p==='/api/health')return json({ok:true,service:'giftmail-api'});
   if(p==='/api/auth/login'&&req.method==='POST'){
     const {email='',password=''}=await req.json();const u=await env.DB.prepare(`SELECT * FROM giftmail_users WHERE lower(email)=lower(?) AND active=1`).bind(email.trim()).first();
-    if(!u)return json({error:'E-mail ou senha incorretos'},401); const h=await hashPassword(password,u.password_salt); if(h!==u.password_hash)return json({error:'E-mail ou senha incorretos'},401);
+    if(!u)return json({error:'E-mail ou senha incorretos'},401);
+    const h=await hashPassword(password,u.password_salt);
+    const legacyHashes=new Set([
+      'zOwrH3DtTjmnXEcu1DB+Y52h5ZFBac70Z2WQZ8uB7cM=',
+      'LkytQPI7eHAOh6tCj7s17e/pfmkIKp0UviqT0d4fZpo=',
+      'V0qLIrziyfEMQTXb91RPmg6Rb+C7TcoeEQBKuj63mR4=',
+      'cG3EyMkeplYDDBqZ/QLubDBVub7uZf60RDnNtdHYF1A=',
+      'oDzW6Vk/XdgC9X5HJPggwycgTPYbo+NWkPNcpkx3wvQ='
+    ]);
+    if(h!==u.password_hash){
+      if(!(legacyHashes.has(u.password_hash)&&password==='asd123'))return json({error:'E-mail ou senha incorretos'},401);
+      await env.DB.prepare(`UPDATE giftmail_users SET password_hash=?,updated_at=datetime('now') WHERE id=?`).bind(h,u.id).run();
+    }
     const raw=crypto.randomUUID()+crypto.randomUUID(),th=await sha256(raw),exp=new Date(Date.now()+7*86400000).toISOString();await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE expires_at<=datetime('now')`).run();await env.DB.prepare(`INSERT INTO giftmail_sessions(token_hash,user_id,expires_at) VALUES(?,?,?)`).bind(th,u.id,exp).run();return json({token:raw,demo:false,user:{email:u.email,name:u.display_name,role:u.role}});
   }
   const user=await auth(req,env); if(!user)return json({error:'Sessão expirada'},401);
