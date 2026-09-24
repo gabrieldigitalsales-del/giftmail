@@ -407,3 +407,42 @@ html,body{min-height:100%;height:100%;overflow:hidden}
   .nav-item,.custom-folder{height:38px!important}
   .section-title{padding-top:12px!important}
 }
+
+
+/* V11 - compositor aprovado, popups e transicoes */
+.compose-window{position:fixed!important;right:12px!important;bottom:24px!important;width:500px!important;height:430px!important;min-height:0!important;max-height:none!important;display:flex!important;flex-direction:column!important;background:#fff!important;border:1px solid #dfe3e6!important;border-radius:9px!important;overflow:hidden!important;box-shadow:0 12px 34px rgba(0,0,0,.18)!important}
+.compose-window.min{height:40px!important;overflow:hidden!important}
+.compose-window.max{left:50%!important;top:50%!important;right:auto!important;bottom:auto!important;width:min(960px,94vw)!important;height:min(760px,92vh)!important;transform:translate(-50%,-50%)!important}
+.compose-head{flex:0 0 40px!important;height:40px!important;padding:0 12px!important;border-radius:8px 8px 0 0!important;background:#30383e!important}
+.compose-head strong{font-size:14px!important;font-weight:700!important}.compose-head-actions{display:flex;align-items:center;gap:2px}.compose-head-actions button{width:30px!important;height:30px!important;color:#fff!important;font-size:16px!important}
+.compose-to-line,.compose-extra-line{flex:0 0 39px;height:39px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px;padding:0 12px;border-bottom:1px solid #e7eaed;background:#fff}
+.compose-to-line span,.compose-extra-line span{font-size:13px;color:#737b83}.compose-to-line input,.compose-extra-line input{width:100%;height:100%;border:0!important;outline:0!important;background:transparent!important;padding:0!important;font-size:13px!important;min-width:0}.compose-to-line button{height:100%;padding:0 0 0 8px!important;font-size:12px!important;color:#4f575e!important;background:transparent!important;white-space:nowrap}
+.compose-ccbcc{flex:0 0 auto;background:#fff}.compose-extra-line{grid-template-columns:28px minmax(0,1fr)}
+.compose-subject-line{flex:0 0 39px;height:39px;border-bottom:1px solid #e7eaed;background:#fff;padding:0 12px}.compose-subject-line input{width:100%;height:100%;border:0!important;outline:0!important;background:transparent!important;padding:0!important;font-size:13px!important;color:#171a1d!important}.compose-subject-line input::placeholder{color:#7a8289;opacity:1}
+.compose-format-toolbar{flex:0 0 42px!important;height:42px!important;min-height:42px!important;padding:0 10px!important;gap:1px!important;border-bottom:1px solid #e7eaed!important;background:#fff!important;overflow:hidden!important;white-space:nowrap!important}.compose-format-toolbar select,.compose-format-toolbar button{height:29px!important;min-height:29px!important;border:0!important;background:transparent!important;color:#20262b!important;font-size:13px!important}.compose-format-toolbar select:first-child{width:61px!important}.compose-format-toolbar select:nth-child(2){width:45px!important}.compose-format-toolbar button{min-width:27px!important;padding:0 4px!important}
+.body-editor{flex:1 1 auto!important;height:auto!important;min-height:0!important;width:100%!important;padding:13px 16px!important;background:#fff!important;outline:none!important;border:0!important;font-size:14px!important;line-height:1.55!important;cursor:text!important;overflow:auto!important;overflow-x:hidden!important;white-space:pre-wrap!important;overflow-wrap:anywhere!important;word-break:normal!important;scrollbar-width:none!important}.body-editor::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}.body-editor:empty:before{content:""!important;display:block!important;min-height:100%!important}.message-resize-handle{display:none!important}
+.attachment-preview{flex:0 0 auto!important;max-height:52px!important;overflow:auto!important;padding:0 12px!important;background:#fff!important;scrollbar-width:none!important}.attachment-preview::-webkit-scrollbar{display:none!important}
+.compose-foot{flex:0 0 58px!important;height:58px!important;padding:0 16px!important;gap:12px!important;border-top:0!important;background:#fff!important}.send-btn,.send-menu{height:36px!important}.send-btn{padding:0 16px!important;border-radius:6px 0 0 6px!important}.send-menu{width:34px!important;border-radius:0 6px 6px 0!important}.compose-tools{gap:1px!important}.compose-tools button,.compose-tools label{width:31px!important;height:31px!important;font-size:14px!important}
+.dark .compose-window,.dark .compose-to-line,.dark .compose-extra-line,.dark .compose-subject-line,.dark .compose-format-toolbar,.dark .body-editor,.dark .compose-foot,.dark .attachment-preview{background:#10191f!important;color:#f4f7f9!important}.dark .compose-to-line,.dark .compose-extra-line,.dark .compose-subject-line,.dark .compose-format-toolbar{border-color:#2e3a43!important}.dark .compose-to-line input,.dark .compose-extra-line input,.dark .compose-subject-line input,.dark .compose-format-toolbar select,.dark .compose-format-toolbar button{color:#f4f7f9!important}
+@media(max-width:820px){.compose-window{left:2vw!important;right:2vw!important;width:96vw!important;bottom:8px!important;height:70vh!important}.compose-window.max{width:96vw!important;height:92vh!important}}
+@keyframes giftComposeOpen{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes giftComposeClose{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(10px) scale(.99)}}
+.compose-window.compose-opening:not(.max){animation:giftComposeOpen .20s ease-out both!important}
+.compose-window.compose-closing:not(.max){animation:giftComposeClose .17s ease-in both!important;pointer-events:none!important}
+@keyframes giftComposeOpenMax{from{opacity:0;transform:translate(-50%,-48%) scale(.985)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes giftComposeCloseMax{from{opacity:1;transform:translate(-50%,-50%) scale(1)}to{opacity:0;transform:translate(-50%,-48%) scale(.99)}}
+.compose-window.max.compose-opening{animation:giftComposeOpenMax .20s ease-out both!important}
+.compose-window.max.compose-closing{animation:giftComposeCloseMax .17s ease-in both!important;pointer-events:none!important}
+.compose-dialog-overlay{position:fixed;inset:0;z-index:2200;display:grid;place-items:center;padding:18px;background:rgba(12,16,20,.38);backdrop-filter:blur(3px)}
+.compose-dialog-overlay.dialog-enter{animation:giftDialogIn .16s ease-out both}
+.compose-dialog-overlay.dialog-leave{animation:giftDialogOut .13s ease-in both}
+@keyframes giftDialogIn{from{opacity:0}to{opacity:1}}
+@keyframes giftDialogOut{from{opacity:1}to{opacity:0}}
+.compose-dialog-card{width:min(430px,94vw);background:#fff;border:1px solid #e1e5e8;border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.24);padding:24px 24px 20px;text-align:center}
+.dialog-enter .compose-dialog-card{animation:giftDialogCardIn .18s ease-out both}
+@keyframes giftDialogCardIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.compose-dialog-icon{width:44px;height:44px;margin:0 auto 12px;border-radius:50%;display:grid;place-items:center;background:#fff1f2;color:#e91018;font-size:20px}
+.compose-dialog-card h3{margin:0 0 7px;font-size:18px}.compose-dialog-card p{margin:0 auto 20px;max-width:355px;color:#6f7881;font-size:13px;line-height:1.5}
+.compose-dialog-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.compose-dialog-actions button{height:38px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:700}
+.compose-dialog-cancel{background:#f1f3f5}.compose-dialog-secondary{background:#fff;border:1px solid #dfe3e7!important;color:#3e464d}.compose-dialog-primary{background:#ff171f;color:#fff}.compose-dialog-primary.danger{background:#c91820}.compose-dialog-actions button:disabled{opacity:.6;cursor:not-allowed}
+.dark .compose-dialog-card{background:#121c22;color:#f4f7f9;border-color:#33414b}.dark .compose-dialog-card p{color:#aab3bc}.dark .compose-dialog-cancel{background:#202c34}.dark .compose-dialog-secondary{background:#121c22!important;border-color:#3a4750!important;color:#e9eef1}.dark .compose-dialog-icon{background:#35181a;color:#ff4b51}
