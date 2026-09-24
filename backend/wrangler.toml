@@ -1,0 +1,15 @@
+name = "giftmail-api"
+main = "worker.js"
+compatibility_date = "2026-09-24"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "giftmail-prod-db"
+database_id = "950ad36f-530f-4e7d-bded-092de4c63eeb"
+
+[[r2_buckets]]
+binding = "ATTACHMENTS"
+bucket_name = "giftmail-prod-attachments"
+
+[triggers]
+crons = ["* * * * *"]
