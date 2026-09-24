@@ -142,3 +142,6 @@ body.dark{--ink:#f4f7f9;--muted:#aab3bc;--line:#2c363e;background:#0e151a}.dark 
 
 /* V12 - icones de webmail + confirmacoes globais */
 .mail-icon{display:inline-grid;place-items:center;flex:0 0 auto;line-height:0}.mail-icon svg{display:block}.nav-item .mail-icon{width:20px;height:20px;color:#cfd6db}.nav-item.active .mail-icon{color:#fff}.compose-btn .mail-icon{width:20px;height:20px}.top-icon .mail-icon{margin:auto}.profile-menu button{display:flex;align-items:center;gap:9px}.profile-menu .mail-icon{width:18px;height:18px}.action-group button .mail-icon{width:18px;height:18px}.compose-tools .mail-icon{width:17px;height:17px}.custom-folder .mail-icon{width:18px;height:18px;color:#aeb8bf}.inline-mail-icon{display:inline-flex;vertical-align:-2px;margin-left:4px;color:#7e8991}.reader-meta-actions button svg,.attachment-download svg{display:block;margin:auto}.danger-action{color:#b5151c!important}.danger-action:hover{background:#fff2f3!important}.compose-dialog-primary.danger{background:#c91820!important;color:#fff!important}.compose-dialog-icon svg{display:block}.dark .nav-item .mail-icon,.dark .custom-folder .mail-icon{color:#c3ccd2}.dark .danger-action:hover{background:#32181b!important}
+
+/* Fix: compositor nunca pode aparecer quando estiver oculto */
+.compose-window.hidden{display:none!important}
