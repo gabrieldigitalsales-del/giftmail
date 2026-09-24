@@ -17,8 +17,8 @@
       <h1>Acesse sua conta GIFT</h1>
       <p>Comunicação corporativa segura, organizada e integrada.</p>
       <form id="loginForm">
-        <label>E-mail<input id="loginEmail" type="email" autocomplete="username" required></label>
-        <label>Senha<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+        <label>E-mail<input id="loginEmail" type="email"  autocomplete="username" required></label>
+        <label>Senha<input id="loginPassword" type="password"  autocomplete="current-password" required></label>
         <label class="check-line"><input id="rememberMe" type="checkbox" checked> Manter conectado</label>
         <button class="primary full" type="submit">Entrar</button>
       </form>
@@ -118,22 +118,67 @@
   </div>
 
   <div id="composeWindow" class="compose-window hidden">
-    <div class="compose-head"><strong id="composeTitle">Novo e-mail</strong><div><button id="minimizeCompose">—</button><button id="maximizeCompose">↗</button><button id="closeCompose">×</button></div></div>
-    <div class="compose-row"><span>Para</span><input id="toField"><button id="ccBccBtn">Cc Bcc</button></div>
-    <div id="ccBccFields" class="hidden"><div class="compose-row"><span>Cc</span><input id="ccField"></div><div class="compose-row"><span>Bcc</span><input id="bccField"></div></div>
-    <div class="compose-row"><span>Assunto</span><input id="subjectField"></div>
-    <div class="editor-toolbar">
-      <select id="fontFamily"><option>Inter</option><option>Arial</option><option>Georgia</option><option>Verdana</option></select>
-      <select id="fontSize"><option value="14">14</option><option value="12">12</option><option value="16">16</option><option value="18">18</option></select>
-      <button data-cmd="bold"><b>B</b></button><button data-cmd="italic"><i>I</i></button><button data-cmd="underline"><u>U</u></button><button data-cmd="foreColor">A</button><button data-cmd="insertUnorderedList">☷</button><button data-cmd="insertOrderedList">☰</button><button data-cmd="createLink">🔗</button><button data-cmd="insertImage">▧</button><button data-cmd="undo">↶</button>
+    <div class="compose-head">
+      <strong id="composeTitle">Novo e-mail</strong>
+      <div class="compose-head-actions">
+        <button id="minimizeCompose" type="button" aria-label="Minimizar">—</button>
+        <button id="maximizeCompose" type="button" aria-label="Maximizar">↗</button>
+        <button id="closeCompose" type="button" aria-label="Fechar">×</button>
+      </div>
     </div>
-    <div id="bodyEditor" class="body-editor" contenteditable="false"></div>
+    <div class="compose-to-line">
+      <span>Para</span>
+      <input id="toField" autocomplete="off" aria-label="Para">
+      <button id="ccBccBtn" type="button">Cc&nbsp;&nbsp;Bcc</button>
+    </div>
+    <div id="ccBccFields" class="compose-ccbcc hidden">
+      <div class="compose-extra-line"><span>Cc</span><input id="ccField" autocomplete="off" aria-label="Cc"></div>
+      <div class="compose-extra-line"><span>Bcc</span><input id="bccField" autocomplete="off" aria-label="Bcc"></div>
+    </div>
+    <div class="compose-subject-line">
+      <input id="subjectField" aria-label="Assunto" placeholder="Assunto" autocomplete="off">
+    </div>
+    <div class="editor-toolbar compose-format-toolbar" aria-label="Formatação da mensagem">
+      <select id="fontFamily" aria-label="Fonte"><option>Inter</option><option>Arial</option><option>Georgia</option><option>Verdana</option></select>
+      <select id="fontSize" aria-label="Tamanho"><option value="14">14</option><option value="12">12</option><option value="16">16</option><option value="18">18</option></select>
+      <button type="button" data-cmd="bold" title="Negrito"><b>B</b></button>
+      <button type="button" data-cmd="italic" title="Itálico"><i>I</i></button>
+      <button type="button" data-cmd="underline" title="Sublinhado"><u>U</u></button>
+      <button type="button" data-cmd="foreColor" title="Cor">A</button>
+      <button type="button" data-cmd="insertUnorderedList" title="Lista">☷</button>
+      <button type="button" data-cmd="insertOrderedList" title="Lista numerada">☰</button>
+      <button type="button" data-cmd="createLink" title="Link">⌁</button>
+      <button type="button" data-cmd="insertImage" title="Imagem">▧</button>
+    </div>
+    <div id="bodyEditor" class="body-editor" contenteditable="true" role="textbox" aria-label="Mensagem"></div>
     <div id="attachmentPreview" class="attachment-preview"></div>
     <div class="compose-foot">
       <div class="send-wrap"><button id="sendBtn" class="send-btn">Enviar</button><button id="sendMenuBtn" class="send-menu">⌄</button></div>
-      <div class="compose-tools"><label title="Anexar">⌕<input id="attachmentInput" type="file" multiple hidden></label><button id="insertDrive" title="Inserir arquivo">▧</button><button id="insertLink" title="Inserir link">⌁</button><button id="insertEmoji" title="Emoji">☺</button><button id="toggleSignature" title="Assinatura">A≡</button><button id="saveDraftBtn" title="Salvar rascunho">▣</button><button id="discardCompose" title="Descartar">⌫</button></div>
+      <div class="compose-tools">
+        <label title="Anexar">⌕<input id="attachmentInput" type="file" multiple hidden></label>
+        <button id="insertDrive" title="Inserir arquivo">▧</button>
+        <button id="insertLink" title="Inserir link">⌁</button>
+        <button id="insertEmoji" title="Emoji">☺</button>
+        <button id="toggleSignature" title="Assinatura">A≡</button>
+        <button id="saveDraftBtn" title="Salvar rascunho">▣</button>
+        <button id="discardCompose" title="Descartar">⋮</button>
+      </div>
     </div>
     <div id="scheduleMenu" class="schedule-menu hidden"><button data-minutes="30">Enviar em 30 minutos</button><button data-minutes="60">Enviar em 1 hora</button><button data-minutes="1440">Enviar amanhã</button><button id="customScheduleBtn">Escolher data e hora</button></div>
+  </div>
+
+
+  <div id="composeDialog" class="compose-dialog-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="composeDialogTitle">
+    <div class="compose-dialog-card">
+      <div class="compose-dialog-icon">✉</div>
+      <h3 id="composeDialogTitle">Confirmar ação</h3>
+      <p id="composeDialogText"></p>
+      <div class="compose-dialog-actions">
+        <button id="composeDialogCancel" type="button" class="compose-dialog-cancel">Cancelar</button>
+        <button id="composeDialogSecondary" type="button" class="compose-dialog-secondary">Não salvar</button>
+        <button id="composeDialogPrimary" type="button" class="compose-dialog-primary">Confirmar</button>
+      </div>
+    </div>
   </div>
 
   <div id="settingsModal" class="modal hidden">
@@ -184,10 +229,7 @@
             </div>
             <label>Site<input id="signatureSite" placeholder="www.giftexcellence.com.br"></label>
             <div class="signature-image-control">
-              <div>
-                <strong>Imagem / logo da assinatura</strong>
-                <small>PNG, JPG ou WEBP. Essa imagem será usada nos e-mails enviados por esta conta.</small>
-              </div>
+              <div><strong>Imagem / logo da assinatura</strong><small>PNG, JPG ou WEBP. Essa imagem será usada nos e-mails enviados por esta conta.</small></div>
               <div class="signature-image-actions">
                 <label class="signature-upload-btn">Trocar imagem<input id="signatureLogoInput" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>
                 <button id="signatureLogoReset" type="button">Usar logo padrão</button>
