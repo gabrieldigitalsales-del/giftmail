@@ -216,8 +216,37 @@ function signatureHtml(settings=state.settings){
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:620px;width:100%;margin-top:24px"><tr><td style="padding:6px 24px 14px 0;width:210px;vertical-align:middle"><img src="${logo}" alt="GIFT Excellence" style="display:block;max-width:195px;max-height:95px;width:auto;height:auto;border:0"></td><td style="border-left:2px solid #ff161f;padding:6px 0 14px 24px;vertical-align:middle"><div style="font-size:16px;font-weight:700;line-height:1.25;margin-bottom:2px">${name}</div><div style="font-size:12px;color:#666;margin-bottom:9px">${company}</div><div style="font-size:12px;line-height:1.65">☎&nbsp; ${phone}<br>✉&nbsp; ${email}<br>●&nbsp; ${city}</div></td></tr><tr><td colspan="2" style="border-top:2px solid #ff161f;padding-top:9px"><a href="${escapeHtml(hrefSite)}" style="font-size:12px;color:#ff161f;text-decoration:none">${site}</a></td></tr></table>`;
 }
 function ensureMessageArea(){return $('#bodyEditor')}
-function focusMessageArea(){requestAnimationFrame(()=>$('#bodyEditor').focus())}
-function appendSignature(){const ed=$('#bodyEditor');ed.querySelector('[data-gift-signature]')?.remove();const sig=document.createElement('div');sig.className='signature-block';sig.dataset.giftSignature='1';sig.setAttribute('contenteditable','false');sig.innerHTML=signatureHtml();if(ed.innerHTML.trim())ed.insertAdjacentHTML('beforeend','<br><br>');ed.appendChild(sig);focusMessageArea()}
+function focusMessageArea(){
+  requestAnimationFrame(()=>{
+    const ed=$('#bodyEditor');if(!ed)return;
+    ed.focus();
+    const target=ed.querySelector('[data-compose-input]')||ed;
+    try{
+      const range=document.createRange(),sel=window.getSelection();
+      range.selectNodeContents(target);
+      range.collapse(true);
+      sel.removeAllRanges();sel.addRange(range);
+    }catch{}
+  });
+}
+function appendSignature(){
+  const ed=$('#bodyEditor');ed.querySelector('[data-gift-signature]')?.remove();
+  if(!ed.textContent.trim()&&!ed.querySelector('[data-compose-input]')){
+    const input=document.createElement('div');
+    input.dataset.composeInput='1';
+    input.innerHTML='<br>';
+    ed.appendChild(input);
+  }else if(ed.innerHTML.trim()){
+    ed.insertAdjacentHTML('beforeend','<br><br>');
+  }
+  const sig=document.createElement('div');
+  sig.className='signature-block';
+  sig.dataset.giftSignature='1';
+  sig.setAttribute('contenteditable','false');
+  sig.innerHTML=signatureHtml();
+  ed.appendChild(sig);
+  focusMessageArea();
+}
 function prependSignature(){appendSignature()}
 function renderSignaturePreview(){const el=$('#signaturePreview');if(!el)return;const preview={...state.settings,signatureName:$('#signatureName')?.value||state.settings.signatureName,signatureCompany:$('#signatureCompany')?.value||state.settings.signatureCompany,signaturePhone:$('#signaturePhone')?.value||state.settings.signaturePhone,signatureCity:$('#signatureCity')?.value||state.settings.signatureCity,signatureSite:$('#signatureSite')?.value||state.settings.signatureSite};el.innerHTML=signatureHtml(preview)}
 function renderComposeAttachments(){$('#attachmentPreview').innerHTML=state.attachments.map((a,i)=>`<span class="attachment-chip"><b>${(a.name||'FILE').split('.').pop().toUpperCase()}</b>${escapeHtml(a.name||'Anexo')} <button data-i="${i}">×</button></span>`).join('');$$('#attachmentPreview button').forEach(b=>b.onclick=()=>{state.attachments.splice(+b.dataset.i,1);renderComposeAttachments()})}
