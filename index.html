@@ -28,17 +28,17 @@
   <div id="appView" class="app hidden">
     <aside class="sidebar" id="sidebar">
       <div class="brand"><img src="assets/gift-logo-sidebar.png" alt="GIFT Excellence"></div>
-      <button id="composeBtn" class="compose-btn"><span>✉</span>Novo e-mail</button>
+      <button id="composeBtn" class="compose-btn"><span class="mail-icon" data-mail-icon="compose"></span>Novo e-mail</button>
 
       <nav class="folder-nav" id="folderNav">
-        <button class="nav-item active" data-folder="inbox"><span class="ico">▰</span><b>Caixa de Entrada</b><em id="count-inbox">0</em></button>
-        <button class="nav-item" data-folder="starred"><span class="ico">★</span><b>Favoritos</b><em id="count-starred"></em></button>
-        <button class="nav-item" data-folder="sent"><span class="ico">➤</span><b>Enviados</b><em id="count-sent"></em></button>
-        <button class="nav-item" data-folder="drafts"><span class="ico">▱</span><b>Rascunhos</b><em id="count-drafts">0</em></button>
-        <button class="nav-item" data-folder="scheduled"><span class="ico">◷</span><b>Agendados</b><em id="count-scheduled"></em></button>
-        <button class="nav-item" data-folder="archive"><span class="ico">▣</span><b>Arquivo</b><em id="count-archive"></em></button>
-        <button class="nav-item" data-folder="spam"><span class="ico">◒</span><b>Spam</b><em id="count-spam"></em></button>
-        <button class="nav-item" data-folder="trash"><span class="ico">▾</span><b>Lixeira</b><em id="count-trash"></em></button>
+        <button class="nav-item active" data-folder="inbox"><span class="ico mail-icon" data-mail-icon="inbox"></span><b>Caixa de Entrada</b><em id="count-inbox">0</em></button>
+        <button class="nav-item" data-folder="starred"><span class="ico mail-icon" data-mail-icon="star"></span><b>Favoritos</b><em id="count-starred"></em></button>
+        <button class="nav-item" data-folder="sent"><span class="ico mail-icon" data-mail-icon="send"></span><b>Enviados</b><em id="count-sent"></em></button>
+        <button class="nav-item" data-folder="drafts"><span class="ico mail-icon" data-mail-icon="draft"></span><b>Rascunhos</b><em id="count-drafts">0</em></button>
+        <button class="nav-item" data-folder="scheduled"><span class="ico mail-icon" data-mail-icon="clock"></span><b>Agendados</b><em id="count-scheduled"></em></button>
+        <button class="nav-item" data-folder="archive"><span class="ico mail-icon" data-mail-icon="archive"></span><b>Arquivo</b><em id="count-archive"></em></button>
+        <button class="nav-item" data-folder="spam"><span class="ico mail-icon" data-mail-icon="spam"></span><b>Spam</b><em id="count-spam"></em></button>
+        <button class="nav-item" data-folder="trash"><span class="ico mail-icon" data-mail-icon="trash"></span><b>Lixeira</b><em id="count-trash"></em></button>
       </nav>
 
       <div class="section-title"><span>PASTAS</span><button id="newFolderBtn" title="Nova pasta">＋</button></div>
@@ -55,8 +55,8 @@
         <button class="mobile-menu" id="mobileMenu">☰</button>
         <div class="search-box"><span>⌕</span><input id="searchInput" placeholder="Pesquisar e-mails, remetentes ou assuntos..."><button id="advancedSearchBtn" title="Pesquisa avançada">⌄</button></div>
         <div class="top-right">
-          <button class="top-icon" id="themeBtn" title="Tema">☼</button>
-          <button class="top-icon" id="settingsBtn" title="Configurações">⚙</button>
+          <button class="top-icon" id="themeBtn" title="Tema"><span class="mail-icon" data-mail-icon="sun"></span></button>
+          <button class="top-icon" id="settingsBtn" title="Configurações"><span class="mail-icon" data-mail-icon="settings"></span></button>
           <div class="profile-wrap">
             <button id="profileBtn" class="profile-btn">
               <span class="profile-avatar" id="profileAvatar">A</span>
@@ -65,9 +65,9 @@
             </button>
             <div id="profileMenu" class="profile-menu hidden">
               <div class="profile-status"><span class="dot"></span><div><strong>Logado</strong><small id="menuEmail">admin@giftexcellence.com.br</small></div></div>
-              <button id="profileSettings">⚙ Configurações da conta</button>
-              <button id="profilePassword">⌁ Trocar senha</button>
-              <button id="profileLogout" class="danger">↪ Sair</button>
+              <button id="profileSettings"><span class="mail-icon" data-mail-icon="settings"></span>Configurações da conta</button>
+              <button id="profilePassword"><span class="mail-icon" data-mail-icon="key"></span>Trocar senha</button>
+              <button id="profileLogout" class="danger"><span class="mail-icon" data-mail-icon="logout"></span>Sair</button>
             </div>
           </div>
         </div>
@@ -76,18 +76,18 @@
       <div class="actionbar">
         <div class="action-group left-actions">
           <label class="select-control"><input type="checkbox" id="selectAll"> <span>Selecionar</span></label>
-          <button id="deleteBtn">⌫ <span>Excluir</span></button>
-          <button id="spamBtn">◒ <span>Spam</span></button>
-          <button id="archiveBtn">⇩ <span>Arquivar</span></button>
-          <button id="moveBtn">↥ <span>Mover</span></button>
-          <button id="markBtn">☆ <span>Marcar</span></button>
-          <button id="moreBtn">••• <span>Mais</span></button>
+          <button id="deleteBtn"><span class="mail-icon" data-mail-icon="trash"></span><span>Excluir</span></button><button id="emptyTrashActionBtn" class="hidden danger-action"><span class="mail-icon" data-mail-icon="trashSweep"></span><span>Esvaziar lixeira</span></button>
+          <button id="spamBtn"><span class="mail-icon" data-mail-icon="spam"></span><span>Spam</span></button>
+          <button id="archiveBtn"><span class="mail-icon" data-mail-icon="archive"></span><span>Arquivar</span></button>
+          <button id="moveBtn"><span class="mail-icon" data-mail-icon="folderMove"></span><span>Mover</span></button>
+          <button id="markBtn"><span class="mail-icon" data-mail-icon="star"></span><span>Marcar</span></button>
+          <button id="moreBtn"><span class="mail-icon" data-mail-icon="more"></span><span>Mais</span></button>
         </div>
         <div class="action-group reader-actions" id="readerActions">
-          <button id="replyBtn">↶ <span>Responder</span></button>
-          <button id="replyAllBtn">≪ <span>Responder a todos</span></button>
-          <button id="forwardBtn">↷ <span>Encaminhar</span></button>
-          <button id="readerMoreBtn">⋮</button>
+          <button id="replyBtn"><span class="mail-icon" data-mail-icon="reply"></span><span>Responder</span></button>
+          <button id="replyAllBtn"><span class="mail-icon" data-mail-icon="replyAll"></span><span>Responder a todos</span></button>
+          <button id="forwardBtn"><span class="mail-icon" data-mail-icon="forward"></span><span>Encaminhar</span></button>
+          <button id="readerMoreBtn" title="Mais"><span class="mail-icon" data-mail-icon="moreVertical"></span></button>
         </div>
       </div>
 
@@ -155,13 +155,13 @@
     <div class="compose-foot">
       <div class="send-wrap"><button id="sendBtn" class="send-btn">Enviar</button><button id="sendMenuBtn" class="send-menu">⌄</button></div>
       <div class="compose-tools">
-        <label title="Anexar">⌕<input id="attachmentInput" type="file" multiple hidden></label>
-        <button id="insertDrive" title="Inserir arquivo">▧</button>
-        <button id="insertLink" title="Inserir link">⌁</button>
+        <label title="Anexar"><span class="mail-icon" data-mail-icon="paperclip"></span><input id="attachmentInput" type="file" multiple hidden></label>
+        <button id="insertDrive" title="Inserir arquivo"><span class="mail-icon" data-mail-icon="file"></span></button>
+        <button id="insertLink" title="Inserir link"><span class="mail-icon" data-mail-icon="link"></span></button>
         <button id="insertEmoji" title="Emoji">☺</button>
         <button id="toggleSignature" title="Assinatura">A≡</button>
-        <button id="saveDraftBtn" title="Salvar rascunho">▣</button>
-        <button id="discardCompose" title="Descartar">⋮</button>
+        <button id="saveDraftBtn" title="Salvar rascunho"><span class="mail-icon" data-mail-icon="save"></span></button>
+        <button id="discardCompose" title="Descartar"><span class="mail-icon" data-mail-icon="trash"></span></button>
       </div>
     </div>
     <div id="scheduleMenu" class="schedule-menu hidden"><button data-minutes="30">Enviar em 30 minutos</button><button data-minutes="60">Enviar em 1 hora</button><button data-minutes="1440">Enviar amanhã</button><button id="customScheduleBtn">Escolher data e hora</button></div>
@@ -177,6 +177,18 @@
         <button id="composeDialogCancel" type="button" class="compose-dialog-cancel">Cancelar</button>
         <button id="composeDialogSecondary" type="button" class="compose-dialog-secondary">Não salvar</button>
         <button id="composeDialogPrimary" type="button" class="compose-dialog-primary">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="actionDialog" class="compose-dialog-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="actionDialogTitle">
+    <div class="compose-dialog-card">
+      <div id="actionDialogIcon" class="compose-dialog-icon"><span class="mail-icon" data-mail-icon="alert"></span></div>
+      <h3 id="actionDialogTitle">Confirmar ação</h3>
+      <p id="actionDialogText"></p>
+      <div class="compose-dialog-actions">
+        <button id="actionDialogCancel" type="button" class="compose-dialog-cancel">Cancelar</button>
+        <button id="actionDialogConfirm" type="button" class="compose-dialog-primary">Confirmar</button>
       </div>
     </div>
   </div>
