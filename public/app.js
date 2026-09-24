@@ -30,7 +30,7 @@ async function toggleStar(m){m.starred=!m.starred;renderMessages();if(state.curr
 const folderNames={inbox:'Caixa de Entrada',starred:'Favoritos',sent:'Enviados',drafts:'Rascunhos',scheduled:'Agendados',archive:'Arquivo',spam:'Spam',trash:'Lixeira'};
 async function moveSelected(folder){const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);if(!ids.length)return toast('Selecione ao menos uma mensagem',true);for(const id of ids){const m=state.messages.find(x=>x.id===id)||state.current;await api('/api/messages/'+id,{method:'PATCH',body:JSON.stringify({action:'move',value:folder,folder:m?.folder||state.folder})})}toast('Mensagem(ns) movida(s)');state.current=null;$('#readerPane').innerHTML='<div class="empty-reader"><div class="mail-illustration">✉</div><h2>Selecione uma mensagem</h2><p>O conteúdo do e-mail aparecerá aqui.</p></div>';await refreshAll()}
 async function markSelected(read=true){const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);if(!ids.length)return toast('Selecione ao menos uma mensagem',true);for(const id of ids){const m=state.messages.find(x=>x.id===id)||state.current;await api('/api/messages/'+id,{method:'PATCH',body:JSON.stringify({action:'read',value:read,folder:m?.folder||state.folder})})}await refreshAll()}
-function openCompose(mode='new',m=null){state.composeMode=mode;state.attachments=[];$('#attachmentPreview').innerHTML='';$('#composeWindow').classList.remove('hidden','min');$('#composeTitle').textContent=mode==='new'?'Novo e-mail':mode==='reply'?'Responder':mode==='replyAll'?'Responder a todos':mode==='forward'?'Encaminhar':'Novo e-mail';$('#toField').value='';$('#ccField').value='';$('#bccField').value='';$('#subjectField').value='';$('#bodyEditor').innerHTML='';if(mode==='new'&&state.settings.signatureNew)appendSignature();if(m){if(mode==='reply'||mode==='replyAll'){ $('#toField').value=extractEmail(m.from||''); if(mode==='replyAll')$('#ccField').value=(m.to||[]).filter(x=>x!==state.settings.email).join(', ');$('#subjectField').value=(/^re:/i.test(m.subject)?'':'RE: ')+(m.subject||'');$('#bodyEditor').innerHTML='<br><br><div style="border-left:2px solid #ddd;padding-left:12px;color:#666">Em '+new Date(m.date).toLocaleString('pt-BR')+', '+escapeHtml(nameFromAddress(m.from||''))+' escreveu:<br>'+normalizeBody(m.body)+'</div>';if(state.settings.signatureReplies)prependSignature()}else if(mode==='forward'){ $('#subjectField').value=(/^enc:/i.test(m.subject)?'':'ENC: ')+(m.subject||'');$('#bodyEditor').innerHTML='<br><br><div style="border-top:1px solid #ddd;padding-top:12px;color:#666">---------- Mensagem encaminhada ----------<br><b>De:</b> '+escapeHtml(m.from||'')+'<br><b>Assunto:</b> '+escapeHtml(m.subject||'')+'<br><br>'+normalizeBody(m.body)+'</div>';state.attachments=[...(m.attachments||[])];renderComposeAttachments()}}}
+function openCompose(mode='new',m=null){state.composeMode=mode;state.attachments=[];$('#attachmentPreview').innerHTML='';$('#composeWindow').classList.remove('hidden','min');$('#composeTitle').textContent=mode==='new'?'Novo e-mail':mode==='reply'?'Responder':mode==='replyAll'?'Responder a todos':mode==='forward'?'Encaminhar':'Novo e-mail';$('#toField').value='';$('#ccField').value='';$('#bccField').value='';$('#subjectField').value='';$('#bodyEditor').innerHTML='<div class="compose-message-space"><br></div>';if(mode==='new'&&state.settings.signatureNew)appendSignature();else focusMessageArea();if(m){if(mode==='reply'||mode==='replyAll'){ $('#toField').value=extractEmail(m.from||''); if(mode==='replyAll')$('#ccField').value=(m.to||[]).filter(x=>x!==state.settings.email).join(', ');$('#subjectField').value=(/^re:/i.test(m.subject)?'':'RE: ')+(m.subject||'');$('#bodyEditor').innerHTML='<br><br><div style="border-left:2px solid #ddd;padding-left:12px;color:#666">Em '+new Date(m.date).toLocaleString('pt-BR')+', '+escapeHtml(nameFromAddress(m.from||''))+' escreveu:<br>'+normalizeBody(m.body)+'</div>';if(state.settings.signatureReplies)prependSignature()}else if(mode==='forward'){ $('#subjectField').value=(/^enc:/i.test(m.subject)?'':'ENC: ')+(m.subject||'');$('#bodyEditor').innerHTML='<br><br><div style="border-top:1px solid #ddd;padding-top:12px;color:#666">---------- Mensagem encaminhada ----------<br><b>De:</b> '+escapeHtml(m.from||'')+'<br><b>Assunto:</b> '+escapeHtml(m.subject||'')+'<br><br>'+normalizeBody(m.body)+'</div>';state.attachments=[...(m.attachments||[])];renderComposeAttachments()}}}
 function signatureHtml(settings=state.settings){
   const name=escapeHtml(settings.signatureName||settings.displayName||nameFromAddress(settings.email||'GIFT'));
   const company=escapeHtml(settings.signatureCompany||'GIFT Excellence');
@@ -42,8 +42,37 @@ function signatureHtml(settings=state.settings){
   const hrefSite=/^https?:\/\//i.test(settings.signatureSite||'')?(settings.signatureSite||''):'https://'+(settings.signatureSite||'www.giftexcellence.com.br');
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:620px;width:100%;margin-top:24px"><tr><td style="padding:6px 24px 14px 0;width:210px;vertical-align:middle"><img src="${logo}" alt="GIFT Excellence" style="display:block;max-width:195px;max-height:95px;width:auto;height:auto;border:0"></td><td style="border-left:2px solid #ff161f;padding:6px 0 14px 24px;vertical-align:middle"><div style="font-size:16px;font-weight:700;line-height:1.25;margin-bottom:2px">${name}</div><div style="font-size:12px;color:#666;margin-bottom:9px">${company}</div><div style="font-size:12px;line-height:1.65">☎&nbsp; ${phone}<br>✉&nbsp; ${email}<br>●&nbsp; ${city}</div></td></tr><tr><td colspan="2" style="border-top:2px solid #ff161f;padding-top:9px"><a href="${escapeHtml(hrefSite)}" style="font-size:12px;color:#ff161f;text-decoration:none">${site}</a></td></tr></table>`;
 }
-function appendSignature(){const ed=$('#bodyEditor');const old=ed.querySelector('[data-gift-signature]');if(old)old.remove();ed.innerHTML+=(ed.innerHTML.trim()?'<br><br>':'')+`<div class="signature-block" data-gift-signature="1" contenteditable="false">${signatureHtml()}</div>`}
-function prependSignature(){const ed=$('#bodyEditor');ed.querySelector('[data-gift-signature]')?.remove();ed.innerHTML=`<div class="signature-block" data-gift-signature="1" contenteditable="false">${signatureHtml()}</div><br><br>`+ed.innerHTML}
+function ensureMessageArea(){
+  const ed=$('#bodyEditor');
+  let area=ed.querySelector('.compose-message-space');
+  if(!area){
+    area=document.createElement('div');
+    area.className='compose-message-space';
+    area.innerHTML='<br>';
+    ed.insertBefore(area,ed.firstChild);
+  }
+  return area;
+}
+function focusMessageArea(){
+  const area=ensureMessageArea();
+  requestAnimationFrame(()=>{
+    area.focus?.();
+    const range=document.createRange(),sel=window.getSelection();
+    range.selectNodeContents(area);range.collapse(false);sel.removeAllRanges();sel.addRange(range);
+  });
+}
+function appendSignature(){
+  const ed=$('#bodyEditor');
+  ed.querySelector('[data-gift-signature]')?.remove();
+  const area=ensureMessageArea();
+  area.insertAdjacentHTML('afterend',`<div class="signature-block" data-gift-signature="1" contenteditable="false">${signatureHtml()}</div>`);
+  focusMessageArea();
+}
+function prependSignature(){
+  const ed=$('#bodyEditor');ed.querySelector('[data-gift-signature]')?.remove();
+  const area=ensureMessageArea();
+  area.insertAdjacentHTML('afterend',`<div class="signature-block" data-gift-signature="1" contenteditable="false">${signatureHtml()}</div>`);
+}
 function renderSignaturePreview(){const el=$('#signaturePreview');if(!el)return;const preview={...state.settings,signatureName:$('#signatureName')?.value||state.settings.signatureName,signatureCompany:$('#signatureCompany')?.value||state.settings.signatureCompany,signaturePhone:$('#signaturePhone')?.value||state.settings.signaturePhone,signatureCity:$('#signatureCity')?.value||state.settings.signatureCity,signatureSite:$('#signatureSite')?.value||state.settings.signatureSite};el.innerHTML=signatureHtml(preview)}
 function renderComposeAttachments(){$('#attachmentPreview').innerHTML=state.attachments.map((a,i)=>`<span class="attachment-chip"><b>${(a.name||'FILE').split('.').pop().toUpperCase()}</b>${escapeHtml(a.name||'Anexo')} <button data-i="${i}">×</button></span>`).join('');$$('#attachmentPreview button').forEach(b=>b.onclick=()=>{state.attachments.splice(+b.dataset.i,1);renderComposeAttachments()})}
 async function sendMessage(folder='sent',scheduledAt=null){const to=splitEmails($('#toField').value);if(folder==='sent'&&!to.length)return toast('Informe ao menos um destinatário',true);const payload={folder,from:state.settings.email,to,cc:splitEmails($('#ccField').value),bcc:splitEmails($('#bccField').value),subject:$('#subjectField').value||'(sem assunto)',html:$('#bodyEditor').innerHTML,attachments:state.attachments,scheduledAt};try{if(folder==='sent')await api('/api/send',{method:'POST',body:JSON.stringify(payload)});else await api('/api/messages',{method:'POST',body:JSON.stringify({...payload,body:payload.html,read:true,starred:false,labels:[]})});toast(folder==='sent'?'E-mail enviado':folder==='drafts'?'Rascunho salvo':'E-mail agendado');$('#composeWindow').classList.add('hidden');await refreshAll()}catch(e){toast(e.message,true)}}
