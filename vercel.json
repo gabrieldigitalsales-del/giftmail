@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://giftmail-api.gabriel-digitalsales.workers.dev/api/:path*"
+      "destination": "https://giftmail-api.giftexcellence.com.br/api/:path*"
     }
   ],
   "headers": [
