@@ -172,8 +172,28 @@
             <button id="changePasswordBtn" class="primary">Alterar senha</button>
           </section>
           <section class="settings-panel" data-panel="signature">
-            <h3>Assinaturas</h3>
-            <label>Assinatura padrão<textarea id="setSignature" rows="9"></textarea></label>
+            <h3>Assinatura corporativa</h3>
+            <p class="hint">A assinatura visual é inserida automaticamente no final dos e-mails e pode ser personalizada por conta.</p>
+            <div class="two-col">
+              <label>Nome / setor<input id="signatureName" placeholder="Financeiro"></label>
+              <label>Empresa<input id="signatureCompany" placeholder="GIFT Excellence"></label>
+            </div>
+            <div class="two-col">
+              <label>Telefone<input id="signaturePhone" placeholder="(31) 3773-1234"></label>
+              <label>Cidade<input id="signatureCity" placeholder="Sete Lagoas - MG"></label>
+            </div>
+            <label>Site<input id="signatureSite" placeholder="www.giftexcellence.com.br"></label>
+            <div class="signature-image-control">
+              <div>
+                <strong>Imagem / logo da assinatura</strong>
+                <small>PNG, JPG ou WEBP. Essa imagem será usada nos e-mails enviados por esta conta.</small>
+              </div>
+              <div class="signature-image-actions">
+                <label class="signature-upload-btn">Trocar imagem<input id="signatureLogoInput" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>
+                <button id="signatureLogoReset" type="button">Usar logo padrão</button>
+              </div>
+            </div>
+            <div id="signaturePreview" class="signature-preview"></div>
             <label class="check-line"><input id="signatureNew" type="checkbox" checked> Inserir automaticamente em novos e-mails</label>
             <label class="check-line"><input id="signatureReplies" type="checkbox"> Inserir também em respostas e encaminhamentos</label>
           </section>
