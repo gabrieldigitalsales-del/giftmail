@@ -44,7 +44,16 @@ function stripHtml(h=''){const d=document.createElement('div');d.innerHTML=h;ret
 function splitEmails(v=''){return v.split(/[;,]/).map(x=>x.trim()).filter(Boolean)}
 function saveLocalSettings(){localStorage.setItem('giftUiSettings',JSON.stringify({...defaults,...state.settings}))}
 function loadLocalSettings(){try{return JSON.parse(localStorage.getItem('giftUiSettings')||'{}')}catch{return {}}}
-function showLogin(){$('#loginView').classList.remove('hidden');$('#appView').classList.add('hidden')}
+function showLogin(){
+  $('#appView').classList.add('hidden');
+  $('#loginView').classList.remove('hidden');
+  const compose=$('#composeWindow');if(compose){compose.classList.add('hidden');compose.classList.remove('min','max','compose-opening','compose-closing')}
+  const composeDialog=$('#composeDialog');if(composeDialog){composeDialog.classList.add('hidden');composeDialog.classList.remove('dialog-enter','dialog-leave')}
+  const actionDialog=$('#actionDialog');if(actionDialog){actionDialog.classList.add('hidden');actionDialog.classList.remove('dialog-enter','dialog-leave')}
+  $('#settingsModal')?.classList.add('hidden');
+  $('#profileMenu')?.classList.add('hidden');
+  $('#contextMenu')?.classList.add('hidden');
+}
 async function showApp(){$('#loginView').classList.add('hidden');$('#appView').classList.remove('hidden');try{const srv=await api('/api/settings');state.settings={...defaults,...loadLocalSettings(),...srv};state.user={email:state.settings.email||'admin@giftexcellence.com.br',name:state.settings.displayName||'Administrador'};applySettings();await refreshAll()}catch(e){localStorage.removeItem('giftToken');state.token='';showLogin();toast(e.message,true)}}
 function applySettings(){const s=state.settings;$('#profileName').textContent=s.displayName||'Administrador';$('#profileEmail').textContent=s.email||'';$('#menuEmail').textContent=s.email||'';$('#profileAvatar').textContent=initials(s.displayName||s.email).slice(0,1);document.body.classList.toggle('compact',s.density==='compact');let theme=s.theme||'light';if(theme==='system')theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.body.classList.toggle('dark',theme==='dark');$('#themeBtn').innerHTML=mailIcon(theme==='dark'?'moon':'sun',19);renderCustomFolders()}
 async function refreshAll(){await Promise.all([loadSummary(),loadMessages(),loadStorage()])}
