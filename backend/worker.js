@@ -79,6 +79,14 @@ async function api(req,env){
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:CORS});
   const url=new URL(req.url),p=url.pathname;
   if(p==='/api/health')return json({ok:true,service:'giftmail-api'});
+  const publicSig=p.match(/^\/api\/public\/signature-logo\/(\d+)$/);
+  if(publicSig&&req.method==='GET'){
+    const st=await env.DB.prepare(`SELECT signature_logo_key FROM giftmail_settings WHERE user_id=?`).bind(Number(publicSig[1])).first();
+    if(!st?.signature_logo_key)return Response.redirect('https://giftmail.vercel.app/assets/gift-logo.png',302);
+    const obj=await env.ATTACHMENTS.get(st.signature_logo_key);
+    if(!obj)return Response.redirect('https://giftmail.vercel.app/assets/gift-logo.png',302);
+    const h=new Headers(CORS);h.set('content-type',obj.httpMetadata?.contentType||'image/png');h.set('cache-control','public, max-age=3600');return new Response(obj.body,{headers:h});
+  }
   if(p==='/api/auth/login'&&req.method==='POST'){
     const {email='',password=''}=await req.json();const u=await env.DB.prepare(`SELECT * FROM giftmail_users WHERE lower(email)=lower(?) AND active=1`).bind(email.trim()).first();
     if(!u)return json({error:'E-mail ou senha incorretos'},401);
