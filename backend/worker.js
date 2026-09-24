@@ -105,6 +105,23 @@ async function api(req,env){
     const raw=crypto.randomUUID()+crypto.randomUUID(),th=await sha256(raw),exp=new Date(Date.now()+7*86400000).toISOString();await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE expires_at<=datetime('now')`).run();await env.DB.prepare(`INSERT INTO giftmail_sessions(token_hash,user_id,expires_at) VALUES(?,?,?)`).bind(th,u.id,exp).run();return json({token:raw,demo:false,user:{email:u.email,name:u.display_name,role:u.role}});
   }
   const user=await auth(req,env); if(!user)return json({error:'Sessão expirada'},401);
+  if(p==='/api/signature-logo'&&req.method==='POST'){
+    const b=await req.json(),data=String(b.data||''),m=data.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/i);
+    if(!m)return json({error:'Envie uma imagem PNG, JPG ou WEBP'},400);
+    const bytes=b64ToBytes(m[2]);if(bytes.byteLength>4*1024*1024)return json({error:'A imagem deve ter no máximo 4 MB'},400);
+    const old=await env.DB.prepare(`SELECT signature_logo_key FROM giftmail_settings WHERE user_id=?`).bind(user.id).first();
+    if(old?.signature_logo_key)await env.ATTACHMENTS.delete(old.signature_logo_key);
+    const ext=m[1].toLowerCase()==='image/jpeg'?'jpg':m[1].split('/')[1],key=`signature-logos/${user.id}/${crypto.randomUUID()}.${ext}`;
+    await env.ATTACHMENTS.put(key,bytes,{httpMetadata:{contentType:m[1]}});
+    await env.DB.prepare(`UPDATE giftmail_settings SET signature_logo_key=?,updated_at=datetime('now') WHERE user_id=?`).bind(key,user.id).run();
+    return json({ok:true,url:`https://giftmail-api.giftexcellence.com.br/api/public/signature-logo/${user.id}`});
+  }
+  if(p==='/api/signature-logo'&&req.method==='DELETE'){
+    const old=await env.DB.prepare(`SELECT signature_logo_key FROM giftmail_settings WHERE user_id=?`).bind(user.id).first();
+    if(old?.signature_logo_key)await env.ATTACHMENTS.delete(old.signature_logo_key);
+    await env.DB.prepare(`UPDATE giftmail_settings SET signature_logo_key='',updated_at=datetime('now') WHERE user_id=?`).bind(user.id).run();
+    return json({ok:true,url:'https://giftmail.vercel.app/assets/gift-logo.png'});
+  }
   if(p==='/api/auth/logout'&&req.method==='POST'){const raw=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE token_hash=?`).bind(await sha256(raw)).run();return json({ok:true})}
   if(p==='/api/summary'&&req.method==='GET'){
     const {results=[]}=await env.DB.prepare(`SELECT folder,COUNT(*) c,SUM(CASE WHEN read_flag=0 THEN 1 ELSE 0 END) unread,SUM(CASE WHEN starred=1 THEN 1 ELSE 0 END) starred FROM giftmail_messages WHERE owner_user_id=? GROUP BY folder`).bind(user.id).all();const out={inbox:0,unread:0,starred:0,sent:0,drafts:0,scheduled:0,archive:0,spam:0,trash:0};for(const r of results){out[r.folder]=r.c;if(r.folder==='inbox')out.unread=r.unread||0;out.starred+=r.starred||0}return json(out)
