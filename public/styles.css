@@ -984,3 +984,30 @@ html,body,button,input,select,textarea{
     border-radius:15px!important
   }
 }
+
+
+/* ===== V16.1 — desktop em escala visual 75% ===== */
+@media(min-width:821px){
+  html{
+    overflow:hidden!important;
+    background:var(--panel,#fff)!important;
+  }
+  body{
+    zoom:.75;
+    width:133.333333vw!important;
+    height:133.333333vh!important;
+    min-width:133.333333vw!important;
+    min-height:133.333333vh!important;
+    overflow:hidden!important;
+  }
+  .app{
+    width:100%!important;
+    height:133.333333vh!important;
+    min-height:133.333333vh!important;
+  }
+  .login-shell{
+    width:100%!important;
+    height:133.333333vh!important;
+    min-height:133.333333vh!important;
+  }
+}
