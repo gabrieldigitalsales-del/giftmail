@@ -34,14 +34,55 @@ function decodeBodyPart(body,cte=''){
   try{if(/base64/i.test(cte))return new TextDecoder().decode(b64ToBytes(body.replace(/\s/g,''))); if(/quoted-printable/i.test(cte))return qpDecode(body); return body}catch{return body}
 }
 function parseMime(raw=''){
-  const h=parseHeaders(raw); const split=raw.search(/\r?\n\r?\n/); const body=split>=0?raw.slice(split).replace(/^\r?\n\r?\n/,''):'';
-  const ct=h['content-type']||'text/plain'; let html='',text=''; const attachments=[];
-  const bm=ct.match(/boundary=(?:"([^"]+)"|([^;\s]+))/i); const boundary=bm&&(bm[1]||bm[2]);
-  const handle=(part)=>{const ph=parseHeaders(part);const si=part.search(/\r?\n\r?\n/);const pb=si>=0?part.slice(si).replace(/^\r?\n\r?\n/,''):'';const pct=ph['content-type']||'text/plain';const disp=ph['content-disposition']||'';const fn=(disp.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i)||pct.match(/name="?([^";]+)/i)||[])[1];if(fn){attachments.push({filename:decodeURIComponent(fn.replace(/^"|"$/g,'')),contentType:pct.split(';')[0],cte:ph['content-transfer-encoding']||'',raw:pb});return}const dec=decodeBodyPart(pb,ph['content-transfer-encoding']);if(/^text\/html/i.test(pct)&&!html)html=dec;if(/^text\/plain/i.test(pct)&&!text)text=dec;};
-  if(boundary){for(const p of body.split('--'+boundary).slice(1)){if(p.startsWith('--'))break;handle(p.replace(/^\r?\n/,''))}} else handle(raw);
+  const rootHeaders=parseHeaders(raw);
+  let html='',text=''; const attachments=[];
+
+  const splitEntity=(entity)=>{
+    const si=entity.search(/\r?\n\r?\n/);
+    const headers=parseHeaders(entity);
+    const body=si>=0?entity.slice(si).replace(/^\r?\n\r?\n/,''):'';
+    return {headers,body};
+  };
+
+  const boundaryOf=(ct='')=>{
+    const m=String(ct).match(/boundary=(?:"([^"]+)"|([^;\s]+))/i);
+    return m&&(m[1]||m[2]);
+  };
+
+  const walk=(entity,depth=0)=>{
+    if(depth>12)return;
+    const {headers:ph,body:pb}=splitEntity(entity);
+    const pct=ph['content-type']||'text/plain';
+    const disp=ph['content-disposition']||'';
+    const boundary=boundaryOf(pct);
+
+    if(/^multipart\//i.test(pct)&&boundary){
+      const chunks=pb.split('--'+boundary).slice(1);
+      for(const chunk of chunks){
+        if(chunk.startsWith('--'))break;
+        const clean=chunk.replace(/^\r?\n/,'').replace(/\r?\n$/,'');
+        if(clean.trim())walk(clean,depth+1);
+      }
+      return;
+    }
+
+    const fn=(disp.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i)||pct.match(/name="?([^";]+)/i)||[])[1];
+    if(fn){
+      let filename=fn.replace(/^"|"$/g,'');
+      try{filename=decodeURIComponent(filename)}catch{}
+      attachments.push({filename,contentType:pct.split(';')[0],cte:ph['content-transfer-encoding']||'',raw:pb});
+      return;
+    }
+
+    const dec=decodeBodyPart(pb,ph['content-transfer-encoding']);
+    if(/^text\/html/i.test(pct)&&!html)html=dec;
+    if(/^text\/plain/i.test(pct)&&!text)text=dec;
+  };
+
+  walk(raw,0);
   if(!html&&text)html=text.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])).replace(/\n/g,'<br>');
   if(!text&&html)text=stripHtml(html);
-  return {headers:h,html,text,attachments};
+  return {headers:rootHeaders,html,text,attachments};
 }
 async function auth(req,env){
   const raw=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,''); if(!raw)return null;
