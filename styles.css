@@ -434,23 +434,7 @@ body.dark{--ink:#f4f7f9;--muted:#aab3bc;--line:#2c363e;background:#0e151a}.dark 
     line-height:1.6!important
   }
 
-  /* botão voltar do leitor: reutiliza área superior sem mudar JS */
-  .reader.mobile-open:before{
-    content:"← Voltar";
-    position:sticky;
-    top:0;
-    z-index:2;
-    display:block;
-    width:max-content;
-    margin:0 0 10px -6px;
-    padding:8px 10px 6px;
-    background:var(--panel);
-    color:var(--muted);
-    font-size:12px;
-    font-weight:700
-  }
-
-  /* compositor */
+    /* compositor */
   .compose-window{
     left:6px!important;
     right:6px!important;
@@ -580,3 +564,17 @@ body.dark{--ink:#f4f7f9;--muted:#aab3bc;--line:#2c363e;background:#0e151a}.dark 
   .dark .reader.mobile-open,
   .dark .settings-footer{background:#0f181e!important}
 }
+
+@media(max-width:480px){
+  .mobile-reader-back{
+    position:sticky;top:0;z-index:3;
+    display:inline-flex!important;align-items:center;gap:6px;
+    height:36px;margin:0 0 8px -6px;padding:0 10px;
+    background:var(--panel);color:var(--muted);
+    border-radius:7px;font-size:12px;font-weight:700
+  }
+  .mobile-reader-back:hover{background:var(--soft)}
+  .dark .mobile-reader-back{background:#0f181e!important;color:#9eabb3!important}
+  .dark .mobile-reader-back:hover{background:#18242b!important}
+}
+@media(min-width:481px){.mobile-reader-back{display:none!important}}
