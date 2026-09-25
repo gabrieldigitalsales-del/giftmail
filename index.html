@@ -315,5 +315,31 @@
   <div id="contextMenu" class="context-menu hidden"></div>
   <input id="hiddenDateTime" type="datetime-local" class="hidden">
   <script src="app.js"></script>
+  <script>
+    (() => {
+      const accountPhone = document.getElementById('setPhone');
+      const signaturePhone = document.getElementById('signaturePhone');
+      const saveButton = document.getElementById('saveSettingsBtn');
+      if (!accountPhone || !signaturePhone) return;
+      let syncing = false;
+      const sync = (from, to) => {
+        if (syncing) return;
+        syncing = true;
+        to.value = from.value;
+        syncing = false;
+      };
+      accountPhone.addEventListener('input', () => {
+        sync(accountPhone, signaturePhone);
+        signaturePhone.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      signaturePhone.addEventListener('input', () => sync(signaturePhone, accountPhone));
+      saveButton?.addEventListener('click', () => {
+        if (accountPhone.value.trim() && accountPhone.value.trim() !== signaturePhone.value.trim()) {
+          signaturePhone.value = accountPhone.value.trim();
+          signaturePhone.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }, true);
+    })();
+  </script>
 </body>
 </html>
