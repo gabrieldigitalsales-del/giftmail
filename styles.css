@@ -1011,3 +1011,22 @@ html,body,button,input,select,textarea{
     min-height:133.333333vh!important;
   }
 }
+
+
+/* ===== V16.2 — protege topo e confina HTML de emails ===== */
+@media(min-width:821px){
+  .topbar{position:relative!important;z-index:60!important}
+  .actionbar{position:relative!important;z-index:50!important}
+  .tabs-row{position:relative!important;z-index:40!important}
+  .mail-shell{position:relative!important;z-index:1!important}
+}
+.reader{position:relative!important}
+.reader-body{
+  position:relative!important;
+  isolation:isolate!important;
+  contain:layout paint!important;
+  overflow-x:auto!important;
+  max-width:100%!important
+}
+.reader-body>*{max-width:100%!important}
+.reader-body img{max-width:100%!important;height:auto!important}
