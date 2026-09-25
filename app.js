@@ -47,9 +47,7 @@ function saveLocalSettings(){localStorage.setItem(settingsStorageKey(),JSON.stri
 function loadLocalSettings(email='default'){
   try{
     const scoped=localStorage.getItem(settingsStorageKey(email));
-    if(scoped)return JSON.parse(scoped);
-    const legacy=localStorage.getItem('giftUiSettings');
-    return legacy?JSON.parse(legacy):{};
+    return scoped?JSON.parse(scoped):{};
   }catch{return {}}
 }
 function showLogin(){
