@@ -29,9 +29,39 @@ function parseHeaders(raw=''){
   for(const line of lines){const i=line.indexOf(':');if(i>0)h[line.slice(0,i).toLowerCase()]=line.slice(i+1).trim()}
   return h;
 }
-function qpDecode(s=''){return s.replace(/=\r?\n/g,'').replace(/=([0-9A-F]{2})/gi,(_,h)=>String.fromCharCode(parseInt(h,16)))}
-function decodeBodyPart(body,cte=''){
-  try{if(/base64/i.test(cte))return new TextDecoder().decode(b64ToBytes(body.replace(/\s/g,''))); if(/quoted-printable/i.test(cte))return qpDecode(body); return body}catch{return body}
+function normalizeCharset(cs='utf-8'){
+  const c=String(cs||'utf-8').trim().toLowerCase().replace(/^["']|["']$/g,'');
+  if(c==='iso-8859-1'||c==='latin1'||c==='latin-1')return 'windows-1252';
+  if(c==='us-ascii'||c==='ascii')return 'utf-8';
+  return c||'utf-8';
+}
+function contentCharset(ct=''){
+  const m=String(ct).match(/charset\s*=\s*(?:"([^"]+)"|'([^']+)'|([^;\s]+))/i);
+  return normalizeCharset(m&&(m[1]||m[2]||m[3])||'utf-8');
+}
+function qpToBytes(s=''){
+  s=String(s).replace(/=\r?\n/g,'');
+  const out=[];
+  for(let i=0;i<s.length;i++){
+    if(s[i]==='='&&/^[0-9A-Fa-f]{2}$/.test(s.slice(i+1,i+3))){
+      out.push(parseInt(s.slice(i+1,i+3),16));i+=2;
+    }else{
+      const code=s.charCodeAt(i);
+      if(code<=255)out.push(code);
+      else out.push(...new TextEncoder().encode(s[i]));
+    }
+  }
+  return new Uint8Array(out);
+}
+function decodeBodyPart(body,cte='',contentType=''){
+  try{
+    const charset=contentCharset(contentType);
+    let bytes;
+    if(/base64/i.test(cte))bytes=b64ToBytes(String(body).replace(/\s/g,''));
+    else if(/quoted-printable/i.test(cte))bytes=qpToBytes(body);
+    else return body;
+    try{return new TextDecoder(charset).decode(bytes)}catch{return new TextDecoder('utf-8').decode(bytes)}
+  }catch{return body}
 }
 function parseMime(raw=''){
   const rootHeaders=parseHeaders(raw);
@@ -74,7 +104,7 @@ function parseMime(raw=''){
       return;
     }
 
-    const dec=decodeBodyPart(pb,ph['content-transfer-encoding']);
+    const dec=decodeBodyPart(pb,ph['content-transfer-encoding'],pct);
     if(/^text\/html/i.test(pct)&&!html)html=dec;
     if(/^text\/plain/i.test(pct)&&!text)text=dec;
   };
