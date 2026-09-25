@@ -145,3 +145,126 @@ body.dark{--ink:#f4f7f9;--muted:#aab3bc;--line:#2c363e;background:#0e151a}.dark 
 
 /* Fix: compositor nunca pode aparecer quando estiver oculto */
 .compose-window.hidden{display:none!important}
+
+
+/* ===== V13 — acabamento sidebar + dark mode ===== */
+/* Contadores: nunca desenhar bolinha vazia */
+.nav-item em:empty{display:none!important}
+.nav-item em{
+  min-width:20px!important;height:20px!important;padding:0 6px!important;
+  border-radius:10px!important;background:#2f3940!important;
+  color:#dfe5e9!important;font-size:11px!important;font-weight:700!important;
+  line-height:20px!important
+}
+.nav-item.active em{background:#56616a!important;color:#fff!important}
+
+/* Sidebar mais limpa */
+.sidebar{background:linear-gradient(180deg,#11181d 0%,#0c1216 100%)!important}
+.nav-item,.custom-folder{color:#dfe5e9!important}
+.nav-item:hover,.custom-folder:hover{background:#1b252b!important}
+.nav-item.active{background:#303a40!important}
+.nav-item .mail-icon,.custom-folder .mail-icon{color:#aeb9c0!important}
+.nav-item.active .mail-icon{color:#fff!important}
+.section-title{color:#aeb8bf!important}
+.storage-box{border-top-color:rgba(255,255,255,.075)!important;color:#aeb8bf!important}
+
+/* Dark mode consistente */
+.dark{--line:#28343c;--muted:#93a0a9;--soft:#162129;--panel:#10191f;--ink:#f2f5f7}
+.dark,.dark body{background:#0c1419!important;color:#eef3f5!important}
+.dark .workspace,
+.dark .topbar,
+.dark .actionbar,
+.dark .mail-shell,
+.dark .tabs-row,
+.dark .message-list,
+.dark .reader{background:#0f181e!important;color:#eef3f5!important}
+
+.dark .topbar,
+.dark .actionbar,
+.dark .tabs-row,
+.dark .message-list,
+.dark .reader{border-color:#26323a!important}
+
+.dark .search-box{background:#18242b!important;border:1px solid #27343c!important}
+.dark .search-box input{color:#eef3f5!important}
+.dark .search-box input::placeholder{color:#7f8c95!important}
+.dark .search-box span,.dark .search-box button{color:#9eabb3!important}
+
+.dark .top-icon{color:#cbd4da!important;background:transparent!important}
+.dark .top-icon:hover{background:#1b272e!important}
+.dark .profile-btn{border-left-color:#27343c!important;color:#eef3f5!important}
+.dark .profile-avatar{background:#46545d!important;color:#fff!important}
+.dark .profile-copy small{color:#8f9ca5!important}
+
+.dark .profile-menu,
+.dark .context-menu{background:#131e24!important;border-color:#2b3841!important;color:#edf2f5!important;box-shadow:0 16px 46px rgba(0,0,0,.38)!important}
+.dark .profile-status{border-bottom-color:#2a363e!important}
+.dark .profile-menu button:hover,
+.dark .context-menu button:hover{background:#1e2b33!important}
+.dark .profile-menu .danger{color:#ff6b70!important}
+
+.dark .action-group button,
+.dark .select-control{border-right-color:#29363e!important;color:#d8e0e5!important}
+.dark .action-group button:hover{background:#18242b!important}
+.dark .select-control input{accent-color:#ff171f}
+
+.dark .advanced-search{background:#111b21!important;border-color:#29363e!important}
+.dark .advanced-search input,
+.dark .advanced-search select{background:#162129!important;border-color:#33424c!important;color:#eef3f5!important}
+
+.dark .tab{color:#9ca9b1!important}
+.dark .tab.active{color:#ff454b!important}
+.dark .message-card{background:#0f181e!important;border-color:#253139!important;color:#e8eef1!important}
+.dark .message-card:hover{background:#162229!important}
+.dark .message-card.active{background:#1b2931!important}
+.dark .message-card .preview-line,
+.dark .message-card time{color:#84929b!important}
+.dark .sender-avatar{background:#33414a!important;color:#fff!important}
+.dark .star-btn{color:#8f9ca5!important}
+.dark .star-btn.on{color:#f0bd58!important}
+
+.dark .reader-head{border-color:#29363e!important}
+.dark .reader-title h1,
+.dark .reader-meta strong{color:#f2f5f7!important}
+.dark .reader-meta small{color:#8e9ba4!important}
+.dark .reader-body{color:#dde5e9!important}
+.dark .folder-pill{background:#1c2931!important;color:#b8c4cb!important;border-color:#33424b!important}
+.dark .attachment-block{border-color:#2a3740!important}
+.dark .attachment-chip{background:#17232a!important;border-color:#33414a!important;color:#e1e7eb!important}
+
+.dark .settings-dialog{background:#111b21!important;border-color:#2c3942!important;color:#eef3f5!important}
+.dark .settings-head,.dark .settings-footer{border-color:#2c3942!important;background:#111b21!important}
+.dark .settings-nav{background:#0d161b!important;border-color:#27343c!important}
+.dark .settings-nav button{color:#aab5bc!important}
+.dark .settings-nav button:hover{background:#172229!important;color:#eef3f5!important}
+.dark .settings-nav button.active{background:#202e36!important;color:#fff!important}
+.dark .settings-panel label,.dark .settings-panel h3{color:#e9eef1!important}
+.dark .settings-panel .hint{color:#8f9ba3!important}
+.dark .settings-panel input,
+.dark .settings-panel textarea,
+.dark .settings-panel select{background:#152027!important;border-color:#33424b!important;color:#edf2f5!important}
+.dark .signature-preview{background:#f7f8f9!important;color:#111!important;border-color:#34424b!important}
+
+/* Evita círculos/blocos claros soltos no topo */
+.dark .top-right button,
+.dark .profile-btn{outline:none!important}
+.dark .top-right button:focus-visible,
+.dark .profile-btn:focus-visible{box-shadow:0 0 0 2px rgba(255,23,31,.35)!important}
+
+/* compositor: mantém estrutura aprovada, apenas harmoniza o dark */
+.dark .compose-window{border-color:#34424b!important;box-shadow:0 18px 55px rgba(0,0,0,.48)!important}
+.dark .compose-head{background:#1b272e!important}
+.dark .compose-to-line,
+.dark .compose-extra-line,
+.dark .compose-subject-line,
+.dark .compose-format-toolbar,
+.dark .body-editor,
+.dark .compose-foot,
+.dark .attachment-preview{background:#111b21!important;color:#edf2f5!important}
+.dark .compose-to-line,
+.dark .compose-extra-line,
+.dark .compose-subject-line,
+.dark .compose-format-toolbar{border-color:#2d3a43!important}
+.dark .compose-format-toolbar button:hover{background:#1d2a32!important}
+.dark .compose-to-line input::placeholder,
+.dark .compose-subject-line input::placeholder{color:#7f8d96!important}
