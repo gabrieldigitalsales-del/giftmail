@@ -639,3 +639,55 @@ body.dark{--ink:#f4f7f9;--muted:#aab3bc;--line:#2c363e;background:#0e151a}.dark 
   }
   .settings-content{padding-bottom:24px!important}
 }
+
+
+/* ===== V15.1 — pull-to-refresh mobile ===== */
+.pull-refresh-indicator{
+  --pull:0px;
+  position:fixed;
+  left:50%;
+  top:calc(-48px + min(var(--pull),54px));
+  transform:translateX(-50%);
+  z-index:1200;
+  height:38px;
+  padding:0 13px;
+  border-radius:20px;
+  background:#fff;
+  border:1px solid #e1e6e9;
+  box-shadow:0 8px 24px rgba(0,0,0,.16);
+  display:none;
+  align-items:center;
+  gap:8px;
+  color:#4f5a62;
+  font-size:12px;
+  font-weight:700;
+  pointer-events:none;
+  transition:top .14s ease,opacity .14s ease;
+  opacity:0
+}
+.pull-refresh-indicator.visible{
+  display:flex;
+  opacity:1
+}
+.pull-refresh-indicator.ready{color:#161b1f}
+.pull-refresh-spinner{
+  width:16px;
+  height:16px;
+  border:2px solid #cfd6da;
+  border-top-color:#ff171f;
+  border-radius:50%;
+  transform:rotate(0deg)
+}
+.pull-refresh-indicator.refreshing .pull-refresh-spinner{
+  animation:giftPullSpin .75s linear infinite
+}
+@keyframes giftPullSpin{to{transform:rotate(360deg)}}
+.dark .pull-refresh-indicator{
+  background:#162129;
+  border-color:#33414a;
+  color:#c8d1d7;
+  box-shadow:0 8px 28px rgba(0,0,0,.36)
+}
+@media(min-width:821px){
+  .pull-refresh-indicator{display:none!important}
+}
