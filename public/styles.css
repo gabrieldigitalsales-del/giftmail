@@ -525,3 +525,13 @@ html,body,button,input,select,textarea{font-family:Arial,Helvetica,sans-serif!im
   .dark .tab{background:#172229!important;color:#aeb8bf!important}
   .dark .tab.active{background:#eef2f4!important;color:#11181d!important}
 }
+
+
+/* ===== V18.1 — confirmações sempre acima de tudo ===== */
+.compose-dialog-overlay{
+  z-index:5000!important;
+}
+.compose-dialog-card{
+  position:relative!important;
+  z-index:5001!important;
+}
