@@ -514,4 +514,38 @@ function initMobilePullToRefresh(){
   },{passive:true});
 }
 initMobilePullToRefresh();
+function initMobileHeaderAutoHide(){
+  if(window.__giftHeaderAutoHideInit)return;
+  window.__giftHeaderAutoHideInit=true;
+  const list=$('#messageList');
+  if(!list)return;
+  let lastY=0,ticking=false;
+  const showHeader=()=>document.body.classList.remove('mobile-header-hidden');
+  const hideHeader=()=>document.body.classList.add('mobile-header-hidden');
+
+  list.addEventListener('scroll',()=>{
+    if(innerWidth>=820)return;
+    if(ticking)return;
+    ticking=true;
+    requestAnimationFrame(()=>{
+      const y=list.scrollTop;
+      const locked=document.body.classList.contains('mobile-search-open')||
+        $('#profileMenu')&&!$('#profileMenu').classList.contains('hidden')||
+        $('#sidebar')?.classList.contains('open');
+      if(locked){showHeader();lastY=y;ticking=false;return}
+      if(y<=8)showHeader();
+      else if(y>lastY+8)hideHeader();
+      else if(y<lastY-8)showHeader();
+      lastY=y;
+      ticking=false;
+    });
+  },{passive:true});
+
+  $('#mobileSearchBtn')?.addEventListener('click',()=>showHeader());
+  $('#profileBtn')?.addEventListener('click',()=>showHeader());
+  $('#mobileMenu')?.addEventListener('click',()=>showHeader());
+  window.addEventListener('resize',()=>{if(innerWidth>=820)showHeader()});
+  window.addEventListener('orientationchange',()=>setTimeout(showHeader,120));
+}
+initMobileHeaderAutoHide();
 applyMailIcons();updateFolderActions();const rememberedEmail=localStorage.getItem('giftRememberedEmail');if(rememberedEmail)$('#loginEmail').value=rememberedEmail;if(state.token)showApp();else showLogin();
