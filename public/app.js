@@ -59,7 +59,7 @@ function showLogin(){
   $('#settingsModal')?.classList.add('hidden');
   $('#profileMenu')?.classList.add('hidden');
   $('#contextMenu')?.classList.add('hidden');
-  $('#sidebar')?.classList.remove('open');$('#mobileNavOverlay')?.classList.add('hidden');document.body.classList.remove('mobile-nav-open');
+  $('#sidebar')?.classList.remove('open');$('#mobileNavOverlay')?.classList.add('hidden');document.body.classList.remove('mobile-nav-open','mobile-reader-open','mobile-search-open','mobile-header-hidden','mobile-selection-active','settings-open');
 }
 async function showApp(){
   $('#loginView').classList.add('hidden');$('#appView').classList.remove('hidden');
@@ -83,7 +83,7 @@ async function refreshAll(){await Promise.all([loadSummary(),loadMessages(),load
 function formatBytes(bytes){if(bytes==null||Number.isNaN(Number(bytes)))return '—';const n=Number(bytes);if(n<1024)return n+' B';const u=['KB','MB','GB','TB'];let v=n/1024,i=0;while(v>=1024&&i<u.length-1){v/=1024;i++}return v.toLocaleString('pt-BR',{maximumFractionDigits:v<10?2:1})+' '+u[i]}
 async function loadStorage(){try{const st=await api('/api/storage');const used=st.usedBytes;const limit=st.limitBytes;const pct=(used!=null&&limit)?Math.max(0,Math.min(100,(used/limit)*100)):0;$('#storageText').textContent=used==null?('Aguardando provedor · '+formatBytes(limit)):(formatBytes(used)+' de '+formatBytes(limit));$('#storageBar').style.width=pct+'%';const bu=$('#storageUsedBig'),bl=$('#storageLimitBig'),bb=$('#storageBarBig'),src=$('#storageSource');if(bu)bu.textContent=used==null?'Aguardando dados':formatBytes(used);if(bl)bl.textContent='de '+formatBytes(limit)+' utilizados';if(bb)bb.style.width=pct+'%';if(src)src.textContent=st.real?(st.source==='local-demo'?'Uso real dos dados locais atuais':'Uso informado pelo servidor/provedor'):'Preparado para receber a quota real do provedor';}catch(e){$('#storageText').textContent='Indisponível';$('#storageBar').style.width='0%';}}
 async function loadSummary(){const s=await api('/api/summary');for(const k of ['inbox','starred','sent','drafts','scheduled','archive','spam','trash']){const el=$('#count-'+k);if(el)el.textContent=s[k]||''}}
-async function loadMessages(){state.selected.clear();$('#selectAll').checked=false;let folder=state.folder;let q=$('#searchInput').value.trim();let data=await api('/api/messages?folder='+encodeURIComponent(folder)+(q?'&q='+encodeURIComponent(q):''));state.messages=data;updateFolderActions();renderMessages();if(!state.current&&folder==='inbox'&&data.length)await openMessage(data[0])}
+async function loadMessages(){state.selected.clear();$('#selectAll').checked=false;let folder=state.folder;let q=$('#searchInput').value.trim();let data=await api('/api/messages?folder='+encodeURIComponent(folder)+(q?'&q='+encodeURIComponent(q):''));state.messages=data;updateFolderActions();renderMessages()}
 function filteredMessages(){let m=[...state.messages];if(state.filter==='unread')m=m.filter(x=>!x.read);if(state.filter==='starred')m=m.filter(x=>x.starred);const f=$('#searchFrom').value.trim().toLowerCase(),t=$('#searchTo').value.trim().toLowerCase(),sub=$('#searchSubject').value.trim().toLowerCase(),att=$('#searchHasAttachment').value;if(f)m=m.filter(x=>(x.from||'').toLowerCase().includes(f));if(t)m=m.filter(x=>(x.to||[]).join(' ').toLowerCase().includes(t));if(sub)m=m.filter(x=>(x.subject||'').toLowerCase().includes(sub));if(att==='yes')m=m.filter(x=>(x.attachments||[]).length);if(att==='no')m=m.filter(x=>!(x.attachments||[]).length);return m}
 function updateMobileSelectionBar(){document.body.classList.toggle('mobile-selection-active',state.selected.size>0);const sa=$('#selectAll');if(sa)sa.checked=filteredMessages().length>0&&filteredMessages().every(m=>state.selected.has(m.id))}
 function renderMessages(){const list=$('#messageList');list.innerHTML='';const msgs=filteredMessages();$('#folderLabel').textContent=folderNames[state.folder]||state.folder;for(const m of msgs){const card=document.createElement('div');card.className='message-card'+(!m.read?' unread':'')+(state.current?.id===m.id?' active':'');card.dataset.id=m.id;const nm=nameFromAddress(m.from||m.to?.[0]||'');card.innerHTML=`<input class="msg-check" type="checkbox" ${state.selected.has(m.id)?'checked':''}><div class="sender-avatar">${initials(nm).slice(0,2)}</div><div class="message-main"><div class="sender-line"><strong>${escapeHtml(nm)}</strong><time>${formatDate(m.date)}</time></div><div class="subject-line"><b>${escapeHtml(m.subject||'(sem assunto)')}</b>${(m.attachments||[]).length?' <span class="inline-mail-icon">'+mailIcon('paperclip',14)+'</span>':''}</div><div class="preview-line">${escapeHtml(stripHtml(m.body||''))}</div></div><button class="star-btn ${m.starred?'on':''}">${m.starred?'★':'☆'}</button>`;card.addEventListener('click',e=>{if(e.target.matches('.msg-check,.star-btn'))return;openMessage(m)});card.querySelector('.msg-check').onchange=e=>{e.target.checked?state.selected.add(m.id):state.selected.delete(m.id);updateMobileSelectionBar()};card.querySelector('.star-btn').onclick=()=>toggleStar(m);card.oncontextmenu=e=>showMessageContext(e,m);list.appendChild(card)}if(!msgs.length)list.innerHTML='<div class="empty-reader" style="height:240px"><div class="mail-illustration">⌕</div><h2>Nenhum e-mail</h2><p>Não encontramos mensagens nesta visualização.</p></div>';updateMobileSelectionBar()}
@@ -219,6 +219,7 @@ function requestEmptySpam(){openActionDialog({title:'Esvaziar spam?',text:'Todas
 function requestLogout(){openActionDialog({title:'Sair do GIFT Mail?',text:'Sua sessão será encerrada neste dispositivo.',confirmLabel:'Sair',danger:true,icon:'logout',onConfirm:logout})}
 function updateFolderActions(){const btn=$('#emptyTrashActionBtn');if(btn)btn.classList.toggle('hidden',state.folder!=='trash')}
 function requestOpenCompose(mode='new',message=null){
+  if(!state.token||!$('#loginView').classList.contains('hidden'))return;
   const w=$('#composeWindow');
   if(!w.classList.contains('hidden')&&composeHasContent()){
     pendingComposeOpen={mode,message};openComposeDialog('replace');return;
@@ -226,6 +227,8 @@ function requestOpenCompose(mode='new',message=null){
   openCompose(mode,message);
 }
 function openCompose(mode='new',m=null){
+  if(!state.token||!$('#loginView').classList.contains('hidden'))return;
+  document.body.classList.remove('mobile-header-hidden');
   state.composeMode=mode;state.attachments=[];$('#composeWindow').classList.remove('max');$('#attachmentPreview').innerHTML='';
   $('#composeTitle').textContent=mode==='new'?'Novo e-mail':mode==='reply'?'Responder':mode==='replyAll'?'Responder a todos':mode==='forward'?'Encaminhar':'Novo e-mail';
   $('#toField').value='';$('#ccField').value='';$('#bccField').value='';$('#subjectField').value='';
@@ -317,7 +320,7 @@ async function sendMessage(folder='sent',scheduledAt=null){
   hideComposeWindow(true);
 }
 function fillSettings(){const s=state.settings;$('#settingsLoggedEmail').textContent=s.email||'';$('#setDisplayName').value=s.displayName||'';$('#setEmail').value=s.email||'';$('#setOrganization').value=s.organization||'';const unifiedPhone=s.signaturePhone||s.phone||'(31) 3772-6397';$('#setPhone').value=unifiedPhone;$('#setWebsite').value=s.website||'';$('#signatureName').value=s.signatureName||s.displayName||'';$('#signatureCompany').value=s.signatureCompany||'GIFT Excellence';$('#signaturePhone').value=unifiedPhone;$('#signatureCity').value=s.signatureCity||'Sete Lagoas - MG';$('#signatureSite').value=s.signatureSite||s.website||'www.giftexcellence.com.br';$('#signatureNew').checked=!!s.signatureNew;$('#signatureReplies').checked=!!s.signatureReplies;$('#forwardEnabled').checked=!!s.forwardEnabled;$('#forwardAddress').value=s.forwardAddress||'';$('#forwardKeepCopy').checked=s.forwardKeepCopy!==false;$('#vacationEnabled').checked=!!s.vacation;$('#vacationText').value=s.vacationText||'';$('#vacationSubject').value=s.vacationSubject||'Resposta automática';$('#vacationStart').value=s.vacationStart||'';$('#vacationEnd').value=s.vacationEnd||'';$('#twoFactor').checked=!!s.twoFactor;$('#suspiciousLogin').checked=s.suspiciousLogin!==false;$('#externalImages').checked=!!s.externalImages;$('#desktopNotifications').checked=s.desktopNotifications!==false;$('#soundNotifications').checked=!!s.soundNotifications;$('#notifyImportant').checked=s.notifyImportant!==false;$('#setTheme').value=s.theme||'light';$('#setDensity').value=s.density||'comfortable';$('#setPreview').value=s.preview||'split';renderAliasList();renderBlockedList();renderRulesList();renderSignaturePreview()}
-function openSettings(tab='account'){$('#settingsModal').classList.remove('hidden');fillSettings();switchSettingsTab(tab)}
+function openSettings(tab='account'){document.body.classList.add('settings-open');document.body.classList.remove('mobile-header-hidden');$('#settingsModal').classList.remove('hidden');fillSettings();switchSettingsTab(tab)}
 function switchSettingsTab(tab){if(tab==='storage')loadStorage();$$('#settingsNav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));$$('.settings-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===tab))}
 function renderAliasList(){$('#aliasList').innerHTML=(state.settings.aliases||[]).map((x,i)=>`<span class="chip">${escapeHtml(x)}<button data-i="${i}">×</button></span>`).join('');$$('#aliasList button').forEach(b=>b.onclick=()=>{state.settings.aliases.splice(+b.dataset.i,1);renderAliasList()})}
 function renderBlockedList(){$('#blockedList').innerHTML=(state.settings.blocked||[]).map((x,i)=>`<span class="chip">${escapeHtml(x)}<button data-i="${i}">×</button></span>`).join('');$$('#blockedList button').forEach(b=>b.onclick=()=>{state.settings.blocked.splice(+b.dataset.i,1);renderBlockedList()})}
@@ -326,10 +329,12 @@ async function saveSettings(){
   const s=state.settings;
   s.displayName=$('#setDisplayName').value.trim()||'Administrador';
   s.organization=$('#setOrganization').value.trim();
+  if(s.organization) s.signatureCompany=s.organization;
   const unifiedPhone=($('#signaturePhone').value.trim()||$('#setPhone').value.trim()||'(31) 3772-6397');
   s.phone=unifiedPhone; s.signaturePhone=unifiedPhone;
   $('#setPhone').value=unifiedPhone; $('#signaturePhone').value=unifiedPhone;
   s.website=$('#setWebsite').value.trim();
+  if(s.website) s.signatureSite=s.website;
   s.signatureName=$('#signatureName').value.trim()||s.displayName;
   s.signatureCompany=$('#signatureCompany').value.trim()||'GIFT Excellence';
   s.signatureCity=$('#signatureCity').value.trim();
@@ -367,7 +372,7 @@ async function saveSettings(){
     applySettings();
     renderSignaturePreview();
     if(!$('#composeWindow').classList.contains('hidden')&&state.composeMode==='new')renderComposeSignature();
-    $('#settingsModal').classList.add('hidden');
+    document.body.classList.remove('settings-open');$('#settingsModal').classList.add('hidden');
     toast('Configurações salvas');
   }catch(err){
     toast('Não foi possível salvar: '+(err?.message||'erro de conexão'),true);
@@ -440,7 +445,7 @@ $$('.editor-toolbar [data-cmd]').forEach(b=>b.onclick=()=>{const cmd=b.dataset.c
 $('#attachmentInput').onchange=async e=>{for(const f of [...e.target.files]){let data='';if(f.size<5*1024*1024)data=await new Promise(ok=>{const r=new FileReader();r.onload=()=>ok(r.result);r.readAsDataURL(f)});state.attachments.push({name:f.name,size:(f.size/1024).toFixed(0)+' KB',data})}renderComposeAttachments();e.target.value=''};
 $('#insertDrive').onclick=()=>toast('Use o botão de anexo para selecionar arquivos deste computador.');$('#insertLink').onclick=()=>{const u=prompt('Cole o link:');if(u)document.execCommand('insertHTML',false,`<a href="${escapeHtml(u)}">${escapeHtml(u)}</a>`)};$('#insertEmoji').onclick=()=>document.execCommand('insertText',false,'🙂');$('#toggleSignature').onclick=()=>{const ed=$('#bodyEditor'),sig=ed.querySelector('[data-gift-signature]');sig?sig.remove():appendSignature()};$('#saveDraftBtn').onclick=()=>openComposeDialog('save-draft');$('#discardCompose').onclick=()=>openComposeDialog('discard');$('#sendBtn').onclick=()=>sendMessage('sent');$('#sendMenuBtn').onclick=()=>$('#scheduleMenu').classList.toggle('hidden');$$('#scheduleMenu [data-minutes]').forEach(b=>b.onclick=()=>{const d=new Date(Date.now()+(+b.dataset.minutes)*60000);sendMessage('scheduled',d.toISOString())});$('#customScheduleBtn').onclick=()=>{$('#hiddenDateTime').showPicker();$('#hiddenDateTime').onchange=()=>{const d=new Date($('#hiddenDateTime').value);if(d>new Date())sendMessage('scheduled',d.toISOString());else toast('Escolha uma data futura',true)}};
 $('#composeDialogCancel').onclick=()=>{pendingComposeOpen=null;closeComposeDialog()};$('#composeDialogSecondary').onclick=performDialogSecondary;$('#composeDialogPrimary').onclick=performDialogPrimary;$('#composeDialog').addEventListener('click',e=>{if(e.target.id==='composeDialog'){pendingComposeOpen=null;closeComposeDialog()}});$('#actionDialogCancel').onclick=closeActionDialog;$('#actionDialogConfirm').onclick=confirmActionDialog;$('#actionDialog').addEventListener('click',e=>{if(e.target.id==='actionDialog')closeActionDialog()});
-$('#closeSettings').onclick=$('#cancelSettings').onclick=()=>$('#settingsModal').classList.add('hidden');$$('#settingsNav button').forEach(b=>b.onclick=()=>switchSettingsTab(b.dataset.tab));$('#saveSettingsBtn').onclick=saveSettings;['signatureName','signatureCompany','signaturePhone','signatureCity','signatureSite'].forEach(id=>$('#'+id)?.addEventListener('input',renderSignaturePreview));$('#setPhone')?.addEventListener('input',e=>{if($('#signaturePhone'))$('#signaturePhone').value=e.target.value;renderSignaturePreview()});$('#signaturePhone')?.addEventListener('input',e=>{if($('#setPhone'))$('#setPhone').value=e.target.value});$('#signatureLogoInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;if(file.size>4*1024*1024){e.target.value='';return toast('A imagem da assinatura deve ter no máximo 4 MB',true)}const data=await new Promise((ok,fail)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=fail;r.readAsDataURL(file)});try{const out=await api('/api/signature-logo',{method:'POST',body:JSON.stringify({name:file.name,type:file.type,data})});state.settings.signatureLogoUrl=out.url;saveLocalSettings();renderSignaturePreview();toast('Imagem da assinatura atualizada')}catch(err){toast(err.message,true)}e.target.value=''};$('#signatureLogoReset').onclick=async()=>{try{const out=await api('/api/signature-logo',{method:'DELETE'});state.settings.signatureLogoUrl=out.url;saveLocalSettings();renderSignaturePreview();toast('Logo padrão restaurado')}catch(e){toast(e.message,true)}};
+$('#closeSettings').onclick=$('#cancelSettings').onclick=()=>{document.body.classList.remove('settings-open');$('#settingsModal').classList.add('hidden')};$$('#settingsNav button').forEach(b=>b.onclick=()=>switchSettingsTab(b.dataset.tab));$('#saveSettingsBtn').onclick=saveSettings;['signatureName','signatureCompany','signaturePhone','signatureCity','signatureSite'].forEach(id=>$('#'+id)?.addEventListener('input',renderSignaturePreview));$('#setPhone')?.addEventListener('input',e=>{if($('#signaturePhone'))$('#signaturePhone').value=e.target.value;renderSignaturePreview()});$('#signaturePhone')?.addEventListener('input',e=>{if($('#setPhone'))$('#setPhone').value=e.target.value});$('#signatureLogoInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;if(file.size>4*1024*1024){e.target.value='';return toast('A imagem da assinatura deve ter no máximo 4 MB',true)}const data=await new Promise((ok,fail)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=fail;r.readAsDataURL(file)});try{const out=await api('/api/signature-logo',{method:'POST',body:JSON.stringify({name:file.name,type:file.type,data})});state.settings.signatureLogoUrl=out.url;saveLocalSettings();renderSignaturePreview();toast('Imagem da assinatura atualizada')}catch(err){toast(err.message,true)}e.target.value=''};$('#signatureLogoReset').onclick=async()=>{try{const out=await api('/api/signature-logo',{method:'DELETE'});state.settings.signatureLogoUrl=out.url;saveLocalSettings();renderSignaturePreview();toast('Logo padrão restaurado')}catch(e){toast(e.message,true)}};
 $('#changePasswordBtn').onclick=async()=>{const c=$('#currentPassword').value,n=$('#newPassword').value,cf=$('#confirmPassword').value;if(n!==cf)return toast('As novas senhas não conferem',true);try{await api('/api/change-password',{method:'POST',body:JSON.stringify({current:c,next:n})});$('#currentPassword').value=$('#newPassword').value=$('#confirmPassword').value='';toast('Senha alterada com sucesso')}catch(e){toast(e.message,true)}};
 $('#addAliasBtn').onclick=()=>{const v=$('#aliasInput').value.trim();if(v&&!state.settings.aliases.includes(v)){state.settings.aliases.push(v);$('#aliasInput').value='';renderAliasList()}};$('#addBlockedBtn').onclick=()=>{const v=$('#blockedInput').value.trim();if(v&&!state.settings.blocked.includes(v)){state.settings.blocked.push(v);$('#blockedInput').value='';renderBlockedList()}};$('#addRuleBtn').onclick=()=>{const from=$('#ruleFrom').value.trim(),action=$('#ruleAction').value,value=$('#ruleValue').value.trim();if(!from)return toast('Informe uma condição para a regra',true);state.settings.rules.push({from,action,value});$('#ruleFrom').value=$('#ruleValue').value='';renderRulesList()};$('#logoutOtherSessions').onclick=()=>toast('Outras sessões encerradas');$('#emptyTrashBtn').onclick=requestEmptyTrash;$('#emptySpamBtn').onclick=requestEmptySpam;
 window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#searchInput').focus()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='enter'&&!$('#composeWindow').classList.contains('hidden'))sendMessage('sent');if(e.key==='Escape'){$('#profileMenu').classList.add('hidden');$('#contextMenu').classList.add('hidden');document.body.classList.remove('mobile-search-open');closeMobileSidebar();if(innerWidth<820){$('#readerPane').classList.remove('mobile-open');document.body.classList.remove('mobile-reader-open')}}});window.addEventListener('resize',()=>{if(innerWidth>=820){closeMobileSidebar();$('#readerPane').classList.remove('mobile-open');document.body.classList.remove('mobile-reader-open','mobile-search-open')}});window.addEventListener('orientationchange',()=>setTimeout(()=>{closeMobileSidebar();if(innerWidth>=820)$('#readerPane').classList.remove('mobile-open')},120));
@@ -519,31 +524,25 @@ function initMobileHeaderAutoHide(){
   window.__giftHeaderAutoHideInit=true;
   const list=$('#messageList');
   if(!list)return;
-  let lastY=0,ticking=false;
+  let ticking=false;
   const showHeader=()=>document.body.classList.remove('mobile-header-hidden');
   const hideHeader=()=>document.body.classList.add('mobile-header-hidden');
-
   list.addEventListener('scroll',()=>{
-    if(innerWidth>=820)return;
-    if(ticking)return;
+    if(innerWidth>=820||ticking)return;
     ticking=true;
     requestAnimationFrame(()=>{
       const y=list.scrollTop;
       const locked=document.body.classList.contains('mobile-search-open')||
-        $('#profileMenu')&&!$('#profileMenu').classList.contains('hidden')||
+        document.body.classList.contains('settings-open')||
+        !$('#profileMenu')?.classList.contains('hidden')||
         $('#sidebar')?.classList.contains('open');
-      if(locked){showHeader();lastY=y;ticking=false;return}
-      if(y<=8)showHeader();
-      else if(y>lastY+8)hideHeader();
-      else if(y<lastY-8)showHeader();
-      lastY=y;
+      if(locked||y<=8)showHeader(); else hideHeader();
       ticking=false;
     });
   },{passive:true});
-
-  $('#mobileSearchBtn')?.addEventListener('click',()=>showHeader());
-  $('#profileBtn')?.addEventListener('click',()=>showHeader());
-  $('#mobileMenu')?.addEventListener('click',()=>showHeader());
+  $('#mobileSearchBtn')?.addEventListener('click',showHeader);
+  $('#profileBtn')?.addEventListener('click',showHeader);
+  $('#mobileMenu')?.addEventListener('click',showHeader);
   window.addEventListener('resize',()=>{if(innerWidth>=820)showHeader()});
   window.addEventListener('orientationchange',()=>setTimeout(showHeader,120));
 }
