@@ -53,9 +53,11 @@
 
     <main class="workspace">
       <header class="topbar">
-        <button class="mobile-menu" id="mobileMenu">☰</button>
+        <button class="mobile-menu" id="mobileMenu" aria-label="Menu">☰</button>
+        <span class="mobile-title">GIFT Mail</span>
         <div class="search-box"><span>⌕</span><input id="searchInput" placeholder="Pesquisar e-mails, remetentes ou assuntos..."><button id="advancedSearchBtn" title="Pesquisa avançada">⌄</button></div>
         <div class="top-right">
+          <button class="top-icon mobile-search-btn" id="mobileSearchBtn" title="Pesquisar" aria-label="Pesquisar"><span class="mail-icon" data-mail-icon="search"></span></button>
           <button class="top-icon" id="themeBtn" title="Tema"><span class="mail-icon" data-mail-icon="sun"></span></button>
           <button class="top-icon" id="settingsBtn" title="Configurações"><span class="mail-icon" data-mail-icon="settings"></span></button>
           <div class="profile-wrap">
@@ -68,6 +70,7 @@
               <div class="profile-status"><span class="dot"></span><div><strong>Logado</strong><small id="menuEmail">admin@giftexcellence.com.br</small></div></div>
               <button id="profileSettings"><span class="mail-icon" data-mail-icon="settings"></span>Configurações da conta</button>
               <button id="profilePassword"><span class="mail-icon" data-mail-icon="key"></span>Trocar senha</button>
+              <button id="profileTheme"><span class="mail-icon" data-mail-icon="moon"></span>Alternar tema</button>
               <button id="profileLogout" class="danger"><span class="mail-icon" data-mail-icon="logout"></span>Sair</button>
             </div>
           </div>
@@ -116,6 +119,7 @@
         </div>
       </section>
     </main>
+    <button id="mobileComposeFab" class="mobile-compose-fab" type="button"><span class="mail-icon" data-mail-icon="compose"></span><span>Escrever</span></button>
   </div>
 
   <div id="composeWindow" class="compose-window hidden">
