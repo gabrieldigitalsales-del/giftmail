@@ -691,3 +691,75 @@ body.dark{--ink:#f4f7f9;--muted:#aab3bc;--line:#2c363e;background:#0e151a}.dark 
 @media(min-width:821px){
   .pull-refresh-indicator{display:none!important}
 }
+
+
+/* ===== V15.2 — perfil mobile + dark controls + Arial ===== */
+html,body,button,input,select,textarea{
+  font-family:Arial,Helvetica,sans-serif!important
+}
+
+/* Perfil sempre clicável e acima das camadas móveis */
+.top-right,.profile-wrap,.profile-btn{pointer-events:auto!important}
+.profile-wrap{z-index:1350!important}
+.profile-btn{position:relative!important;z-index:1351!important}
+.profile-menu{z-index:1400!important}
+
+@media(max-width:820px){
+  .topbar{overflow:visible!important;position:relative!important;z-index:1300!important}
+  .top-right{position:relative!important;z-index:1350!important}
+  .profile-wrap{
+    position:relative!important;
+    z-index:1400!important;
+    flex:0 0 auto!important
+  }
+  .profile-btn{
+    display:grid!important;
+    pointer-events:auto!important;
+    touch-action:manipulation!important
+  }
+  .profile-menu{
+    position:fixed!important;
+    top:56px!important;
+    right:8px!important;
+    width:min(300px,calc(100vw - 16px))!important;
+    max-height:calc(100dvh - 68px)!important;
+    overflow:auto!important;
+    z-index:1700!important
+  }
+}
+
+/* Dark mode: botões e controles secundários deixam de ficar claros */
+.dark .settings-footer{
+  background:#111b21!important;
+  border-top-color:#2d3a43!important
+}
+.dark .settings-footer>button:first-child,
+.dark #cancelSettings,
+.dark .settings-panel button:not(.primary),
+.dark .signature-upload-btn,
+.dark .signature-image-actions button{
+  background:#1a272f!important;
+  color:#dce4e9!important;
+  border-color:#34434d!important
+}
+.dark .settings-footer>button:first-child:hover,
+.dark #cancelSettings:hover,
+.dark .settings-panel button:not(.primary):hover,
+.dark .signature-upload-btn:hover,
+.dark .signature-image-actions button:hover{
+  background:#22313a!important
+}
+.dark .settings-footer .primary,
+.dark #saveSettingsBtn{
+  background:#ff171f!important;
+  color:#fff!important;
+  border-color:#ff171f!important
+}
+.dark button:disabled{
+  opacity:.55!important
+}
+.dark input,
+.dark select,
+.dark textarea{
+  color-scheme:dark
+}
