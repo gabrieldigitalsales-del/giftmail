@@ -397,7 +397,7 @@ $('#loginForm').onsubmit=async e=>{
     await showApp();
   }catch(err){toast(err.message,true)}
 };
-$('#folderNav .nav-item').forEach(b=>b.onclick=async()=>{$('#folderNav .nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.folder=b.dataset.folder;state.current=null;$('#readerPane').classList.remove('mobile-open');closeMobileSidebar();await loadMessages()});
+$$('#folderNav .nav-item').forEach(b=>b.onclick=async()=>{$$('#folderNav .nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.folder=b.dataset.folder;state.current=null;$('#readerPane').classList.remove('mobile-open');closeMobileSidebar();await loadMessages()});
 $$('.tab').forEach(b=>b.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.filter=b.dataset.filter;renderMessages()});
 $('#composeBtn').onclick=()=>{closeMobileSidebar();requestOpenCompose('new')};$('#replyBtn').onclick=()=>state.current?requestOpenCompose('reply',state.current):toast('Selecione uma mensagem');$('#replyAllBtn').onclick=()=>state.current?requestOpenCompose('replyAll',state.current):toast('Selecione uma mensagem');$('#forwardBtn').onclick=()=>state.current?requestOpenCompose('forward',state.current):toast('Selecione uma mensagem');
 $('#searchInput').oninput=()=>{clearTimeout(window.__st);window.__st=setTimeout(loadMessages,250)};$('#advancedSearchBtn').onclick=()=>$('#advancedSearch').classList.toggle('hidden');$('#applyAdvancedSearch').onclick=renderMessages;$('#clearAdvancedSearch').onclick=()=>{$('#searchFrom').value=$('#searchTo').value=$('#searchSubject').value='';$('#searchHasAttachment').value='';renderMessages()};
@@ -443,4 +443,74 @@ $('#closeSettings').onclick=$('#cancelSettings').onclick=()=>$('#settingsModal')
 $('#changePasswordBtn').onclick=async()=>{const c=$('#currentPassword').value,n=$('#newPassword').value,cf=$('#confirmPassword').value;if(n!==cf)return toast('As novas senhas não conferem',true);try{await api('/api/change-password',{method:'POST',body:JSON.stringify({current:c,next:n})});$('#currentPassword').value=$('#newPassword').value=$('#confirmPassword').value='';toast('Senha alterada com sucesso')}catch(e){toast(e.message,true)}};
 $('#addAliasBtn').onclick=()=>{const v=$('#aliasInput').value.trim();if(v&&!state.settings.aliases.includes(v)){state.settings.aliases.push(v);$('#aliasInput').value='';renderAliasList()}};$('#addBlockedBtn').onclick=()=>{const v=$('#blockedInput').value.trim();if(v&&!state.settings.blocked.includes(v)){state.settings.blocked.push(v);$('#blockedInput').value='';renderBlockedList()}};$('#addRuleBtn').onclick=()=>{const from=$('#ruleFrom').value.trim(),action=$('#ruleAction').value,value=$('#ruleValue').value.trim();if(!from)return toast('Informe uma condição para a regra',true);state.settings.rules.push({from,action,value});$('#ruleFrom').value=$('#ruleValue').value='';renderRulesList()};$('#logoutOtherSessions').onclick=()=>toast('Outras sessões encerradas');$('#emptyTrashBtn').onclick=requestEmptyTrash;$('#emptySpamBtn').onclick=requestEmptySpam;
 window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#searchInput').focus()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='enter'&&!$('#composeWindow').classList.contains('hidden'))sendMessage('sent');if(e.key==='Escape'){$('#profileMenu').classList.add('hidden');$('#contextMenu').classList.add('hidden');closeMobileSidebar();if(innerWidth<820)$('#readerPane').classList.remove('mobile-open')}});window.addEventListener('resize',()=>{if(innerWidth>=820){closeMobileSidebar();$('#readerPane').classList.remove('mobile-open')}});window.addEventListener('orientationchange',()=>setTimeout(()=>{closeMobileSidebar();if(innerWidth>=820)$('#readerPane').classList.remove('mobile-open')},120));
+function initMobilePullToRefresh(){
+  if(window.__giftPullRefreshInit)return;
+  window.__giftPullRefreshInit=true;
+  const app=$('#appView');
+  if(!app)return;
+  const indicator=document.createElement('div');
+  indicator.id='pullRefreshIndicator';
+  indicator.className='pull-refresh-indicator';
+  indicator.innerHTML='<span class="pull-refresh-spinner"></span><b>Puxe para atualizar</b>';
+  document.body.appendChild(indicator);
+  let startY=0,pull=0,tracking=false,refreshing=false;
+  const getScrollTop=(target)=>{
+    const scroller=target?.closest?.('.message-list,.reader,.settings-content,.custom-folders');
+    return scroller?scroller.scrollTop:0;
+  };
+  const canStart=(e)=>{
+    if(innerWidth>=820||refreshing)return false;
+    if($('#appView').classList.contains('hidden'))return false;
+    if(!$('#composeWindow').classList.contains('hidden'))return false;
+    if(!$('#settingsModal').classList.contains('hidden'))return false;
+    if($('#sidebar').classList.contains('open'))return false;
+    if(getScrollTop(e.target)>0)return false;
+    return true;
+  };
+  app.addEventListener('touchstart',e=>{
+    if(!canStart(e)||!e.touches?.length){tracking=false;return}
+    startY=e.touches[0].clientY;pull=0;tracking=true;
+    indicator.classList.remove('ready','refreshing');
+    indicator.querySelector('b').textContent='Puxe para atualizar';
+  },{passive:true});
+  app.addEventListener('touchmove',e=>{
+    if(!tracking||!e.touches?.length)return;
+    const dy=e.touches[0].clientY-startY;
+    if(dy<=0){pull=0;indicator.classList.remove('visible','ready');return}
+    pull=Math.min(110,dy*.55);
+    if(pull>6)e.preventDefault();
+    indicator.style.setProperty('--pull',pull+'px');
+    indicator.classList.add('visible');
+    const ready=pull>=64;
+    indicator.classList.toggle('ready',ready);
+    indicator.querySelector('b').textContent=ready?'Solte para atualizar':'Puxe para atualizar';
+  },{passive:false});
+  app.addEventListener('touchend',async()=>{
+    if(!tracking)return;
+    tracking=false;
+    if(pull>=64){
+      refreshing=true;
+      indicator.classList.add('visible','refreshing');
+      indicator.classList.remove('ready');
+      indicator.style.setProperty('--pull','54px');
+      indicator.querySelector('b').textContent='Atualizando...';
+      try{await refreshAll();indicator.querySelector('b').textContent='Atualizado'}
+      catch(e){indicator.querySelector('b').textContent='Falha ao atualizar'}
+      setTimeout(()=>{
+        indicator.classList.remove('visible','refreshing','ready');
+        indicator.style.setProperty('--pull','0px');
+        refreshing=false;
+      },650);
+    }else{
+      indicator.classList.remove('visible','ready');
+      indicator.style.setProperty('--pull','0px');
+    }
+    pull=0;
+  },{passive:true});
+  app.addEventListener('touchcancel',()=>{
+    tracking=false;pull=0;
+    if(!refreshing){indicator.classList.remove('visible','ready');indicator.style.setProperty('--pull','0px')}
+  },{passive:true});
+}
+initMobilePullToRefresh();
 applyMailIcons();updateFolderActions();const rememberedEmail=localStorage.getItem('giftRememberedEmail');if(rememberedEmail)$('#loginEmail').value=rememberedEmail;if(state.token)showApp();else showLogin();
