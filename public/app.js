@@ -100,7 +100,7 @@ function sanitizeEmailHtml(html=''){
         const n=a.name.toLowerCase(),v=String(a.value||'').trim();
         if(n.startsWith('on')||n==='srcdoc'||n==='formaction')el.removeAttribute(a.name);
         if((n==='href'||n==='src'||n==='xlink:href')&&/^\s*(javascript|vbscript|data:text\/html)/i.test(v))el.removeAttribute(a.name);
-        if(n==='style'&&/(position\s*:\s*(fixed|sticky)|z-index\s*:|expression\s*\(|javascript\s*:)/i.test(v))el.removeAttribute('style');
+        if(n==='style'&&/(position\s*:\s*(absolute|fixed|sticky)|z-index\s*:|(?:^|;)\s*(top|left|right|bottom|inset)\s*:|expression\s*\(|javascript\s*:)/i.test(v))el.removeAttribute('style');
       });
       if(el.tagName==='A'){el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer')}
       if(el.tagName==='IMG'){el.style.maxWidth='100%';el.style.height='auto'}
