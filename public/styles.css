@@ -541,3 +541,16 @@ html,body,button,input,select,textarea{font-family:Arial,Helvetica,sans-serif!im
 .message-list.is-loading{opacity:.62;cursor:progress;transition:opacity .12s ease}
 .message-list.is-loading .message-card{pointer-events:none}
 .send-btn:disabled,.send-menu:disabled,.compose-tools button:disabled{opacity:.55!important;cursor:wait!important;pointer-events:none!important}
+
+
+/* ===== V18.4 — card inteiro de anexo clicável ===== */
+.attachment-chip.attachment-open,
+.attachment-chip.attachment-open *,
+.attachment-chip.attachment-open span,
+.attachment-chip.attachment-open b{
+  cursor:pointer!important;
+}
+.attachment-chip.attachment-open .attachment-download,
+.attachment-chip.attachment-open .attachment-download *{
+  cursor:pointer!important;
+}
