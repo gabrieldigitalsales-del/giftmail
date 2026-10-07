@@ -535,3 +535,9 @@ html,body,button,input,select,textarea{font-family:Arial,Helvetica,sans-serif!im
   position:relative!important;
   z-index:5001!important;
 }
+
+
+/* ===== V18.3 — fluidez e estados operacionais ===== */
+.message-list.is-loading{opacity:.62;cursor:progress;transition:opacity .12s ease}
+.message-list.is-loading .message-card{pointer-events:none}
+.send-btn:disabled,.send-menu:disabled,.compose-tools button:disabled{opacity:.55!important;cursor:wait!important;pointer-events:none!important}

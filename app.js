@@ -1,6 +1,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const API_ROOT=['localhost','127.0.0.1'].includes(location.hostname)?'https://giftmail-api.giftexcellence.com.br':'';
-const state={token:localStorage.getItem('giftToken')||sessionStorage.getItem('giftToken')||'',user:null,messages:[],folder:'inbox',filter:'all',selected:new Set(),current:null,settings:{},attachments:[],composeMode:'new'};
+const state={token:localStorage.getItem('giftToken')||sessionStorage.getItem('giftToken')||'',user:null,messages:[],folder:'inbox',filter:'all',selected:new Set(),current:null,settings:{},attachments:[],composeMode:'new',composeBusy:false};
+let messagesRequestController=null,messagesRequestSeq=0;
 const defaults={customFolders:['Comercial','Compras','Engenharia','Financeiro','Projetos'],aliases:[],blocked:[],rules:[],organization:'GIFT Excellence',phone:'(31) 3772-6397',website:'www.giftexcellence.com.br',signatureName:'',signatureCompany:'GIFT Excellence',signaturePhone:'(31) 3772-6397',signatureCity:'Sete Lagoas - MG',signatureSite:'www.giftexcellence.com.br',signatureLogoUrl:'https://giftmail.vercel.app/assets/gift-logo.png',signatureNew:true,signatureReplies:false,forwardEnabled:false,forwardAddress:'',forwardKeepCopy:true,twoFactor:false,suspiciousLogin:true,externalImages:false,desktopNotifications:true,soundNotifications:false,notifyImportant:true,preview:'split'};
 function mailIcon(name,size=18){
   const common=`viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"`;
@@ -36,7 +37,26 @@ function mailIcon(name,size=18){
 }
 function applyMailIcons(){document.querySelectorAll('[data-mail-icon]').forEach(el=>{el.innerHTML=mailIcon(el.dataset.mailIcon,el.dataset.iconSize||18)})}
 function toast(msg,error=false){const d=document.createElement('div');d.className='toast'+(error?' error':'');d.textContent=msg;$('#toast').appendChild(d);setTimeout(()=>d.remove(),2800)}
-async function api(url,opt={}){opt.headers={...(opt.headers||{}),'Content-Type':'application/json'};if(state.token)opt.headers.Authorization='Bearer '+state.token;const r=await fetch(API_ROOT+url,opt);let j={};try{j=await r.json()}catch{}if(!r.ok)throw new Error(j.error||'Falha na operação');return j}
+async function api(url,opt={}){
+  const req={...opt,headers:{...(opt.headers||{}),'Content-Type':'application/json'}};
+  if(state.token)req.headers.Authorization='Bearer '+state.token;
+  const method=(req.method||'GET').toUpperCase(),attempts=method==='GET'?2:1;
+  for(let attempt=0;attempt<attempts;attempt++){
+    try{
+      const r=await fetch(API_ROOT+url,req);let j={};try{j=await r.json()}catch{}
+      if(!r.ok){
+        const err=new Error(j.error||'Falha na operação');err.status=r.status;
+        if(attempt+1<attempts&&[502,503,504].includes(r.status)){await new Promise(ok=>setTimeout(ok,220));continue}
+        throw err;
+      }
+      return j;
+    }catch(e){
+      if(e?.name==='AbortError')throw e;
+      if(attempt+1<attempts){await new Promise(ok=>setTimeout(ok,220));continue}
+      throw e;
+    }
+  }
+}
 function initials(s=''){const clean=s.replace(/<.*?>/g,'').trim();const words=clean.split(/\s+/).filter(Boolean);return (words[0]?.[0]||'G')+(words[1]?.[0]||'');}
 function nameFromAddress(s=''){const m=s.match(/^([^<]+)</);if(m)return m[1].trim();const x=s.replace(/[<>]/g,'').split('@')[0]||s;return x.split(/[._-]/).map(a=>a.charAt(0).toUpperCase()+a.slice(1)).join(' ')}
 function formatDate(s){const d=new Date(s),now=new Date();if(d.toDateString()===now.toDateString())return d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});const y=new Date(now);y.setDate(y.getDate()-1);if(d.toDateString()===y.toDateString())return 'Ontem';return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}
@@ -50,7 +70,22 @@ function loadLocalSettings(email='default'){
     return scoped?JSON.parse(scoped):{};
   }catch{return {}}
 }
+function resetMailboxUiState(clearSearch=false){
+  messagesRequestController?.abort();messagesRequestController=null;messagesRequestSeq++;
+  state.messages=[];state.selected.clear();state.current=null;state.folder='inbox';state.filter='all';
+  const sa=$('#selectAll');if(sa)sa.checked=false;
+  if(clearSearch){
+    ['searchInput','searchFrom','searchTo','searchSubject'].forEach(id=>{const el=$('#'+id);if(el)el.value=''});
+    const att=$('#searchHasAttachment');if(att)att.value='';
+  }
+  $('#folderNav .nav-item').forEach(x=>x.classList.toggle('active',x.dataset.folder==='inbox'));
+  $('.tab').forEach(x=>x.classList.toggle('active',x.dataset.filter==='all'));
+  const list=$('#messageList');if(list){list.innerHTML='';list.classList.remove('is-loading')}
+  const reader=$('#readerPane');if(reader){reader.classList.remove('mobile-open');reader.innerHTML='<div class="empty-reader"><div class="mail-illustration">✉</div><h2>Selecione uma mensagem</h2><p>O conteúdo do e-mail aparecerá aqui.</p></div>'}
+  document.body.classList.remove('mobile-reader-open','mobile-search-open','mobile-selection-active','mobile-header-hidden');
+}
 function showLogin(){
+  resetMailboxUiState(true);state.attachments=[];
   $('#appView').classList.add('hidden');
   $('#loginView').classList.remove('hidden');
   const compose=$('#composeWindow');if(compose){compose.classList.add('hidden');compose.classList.remove('min','max','compose-opening','compose-closing')}
@@ -83,7 +118,19 @@ async function refreshAll(){await Promise.all([loadSummary(),loadMessages(),load
 function formatBytes(bytes){if(bytes==null||Number.isNaN(Number(bytes)))return '—';const n=Number(bytes);if(n<1024)return n+' B';const u=['KB','MB','GB','TB'];let v=n/1024,i=0;while(v>=1024&&i<u.length-1){v/=1024;i++}return v.toLocaleString('pt-BR',{maximumFractionDigits:v<10?2:1})+' '+u[i]}
 async function loadStorage(){try{const st=await api('/api/storage');const used=st.usedBytes;const limit=st.limitBytes;const pct=(used!=null&&limit)?Math.max(0,Math.min(100,(used/limit)*100)):0;$('#storageText').textContent=used==null?('Aguardando provedor · '+formatBytes(limit)):(formatBytes(used)+' de '+formatBytes(limit));$('#storageBar').style.width=pct+'%';const bu=$('#storageUsedBig'),bl=$('#storageLimitBig'),bb=$('#storageBarBig'),src=$('#storageSource');if(bu)bu.textContent=used==null?'Aguardando dados':formatBytes(used);if(bl)bl.textContent='de '+formatBytes(limit)+' utilizados';if(bb)bb.style.width=pct+'%';if(src)src.textContent=st.real?(st.source==='local-demo'?'Uso real dos dados locais atuais':'Uso informado pelo servidor/provedor'):'Preparado para receber a quota real do provedor';}catch(e){$('#storageText').textContent='Indisponível';$('#storageBar').style.width='0%';}}
 async function loadSummary(){const s=await api('/api/summary');for(const k of ['inbox','starred','sent','drafts','scheduled','archive','spam','trash']){const el=$('#count-'+k);if(el)el.textContent=s[k]||''}}
-async function loadMessages(){state.selected.clear();$('#selectAll').checked=false;let folder=state.folder;let q=$('#searchInput').value.trim();let data=await api('/api/messages?folder='+encodeURIComponent(folder)+(q?'&q='+encodeURIComponent(q):''));state.messages=data;updateFolderActions();renderMessages()}
+async function loadMessages(){
+  const seq=++messagesRequestSeq;messagesRequestController?.abort();
+  const controller=new AbortController();messagesRequestController=controller;
+  const folder=state.folder,q=$('#searchInput').value.trim(),list=$('#messageList');
+  list?.classList.add('is-loading');list?.setAttribute('aria-busy','true');
+  try{
+    const data=await api('/api/messages?folder='+encodeURIComponent(folder)+(q?'&q='+encodeURIComponent(q):''),{signal:controller.signal});
+    if(seq!==messagesRequestSeq||folder!==state.folder)return;
+    state.selected.clear();const sa=$('#selectAll');if(sa)sa.checked=false;
+    state.messages=data;updateFolderActions();renderMessages();
+  }catch(e){if(e?.name!=='AbortError')toast('Não foi possível atualizar os e-mails: '+(e?.message||'erro de conexão'),true)}
+  finally{if(seq===messagesRequestSeq){list?.classList.remove('is-loading');list?.removeAttribute('aria-busy')}}
+}
 function filteredMessages(){let m=[...state.messages];if(state.filter==='unread')m=m.filter(x=>!x.read);if(state.filter==='starred')m=m.filter(x=>x.starred);const f=$('#searchFrom').value.trim().toLowerCase(),t=$('#searchTo').value.trim().toLowerCase(),sub=$('#searchSubject').value.trim().toLowerCase(),att=$('#searchHasAttachment').value;if(f)m=m.filter(x=>(x.from||'').toLowerCase().includes(f));if(t)m=m.filter(x=>(x.to||[]).join(' ').toLowerCase().includes(t));if(sub)m=m.filter(x=>(x.subject||'').toLowerCase().includes(sub));if(att==='yes')m=m.filter(x=>(x.attachments||[]).length);if(att==='no')m=m.filter(x=>!(x.attachments||[]).length);return m}
 function updateMobileSelectionBar(){document.body.classList.toggle('mobile-selection-active',state.selected.size>0);const sa=$('#selectAll');if(sa)sa.checked=filteredMessages().length>0&&filteredMessages().every(m=>state.selected.has(m.id))}
 function renderMessages(){const list=$('#messageList');list.innerHTML='';const msgs=filteredMessages();$('#folderLabel').textContent=folderNames[state.folder]||state.folder;for(const m of msgs){const card=document.createElement('div');card.className='message-card'+(!m.read?' unread':'')+(state.current?.id===m.id?' active':'');card.dataset.id=m.id;const nm=nameFromAddress(m.from||m.to?.[0]||'');card.innerHTML=`<input class="msg-check" type="checkbox" ${state.selected.has(m.id)?'checked':''}><div class="sender-avatar">${initials(nm).slice(0,2)}</div><div class="message-main"><div class="sender-line"><strong>${escapeHtml(nm)}</strong><time>${formatDate(m.date)}</time></div><div class="subject-line"><b>${escapeHtml(m.subject||'(sem assunto)')}</b>${(m.attachments||[]).length?' <span class="inline-mail-icon">'+mailIcon('paperclip',14)+'</span>':''}</div><div class="preview-line">${escapeHtml(stripHtml(m.body||''))}</div></div><button class="star-btn ${m.starred?'on':''}">${m.starred?'★':'☆'}</button>`;card.addEventListener('click',e=>{if(e.target.matches('.msg-check,.star-btn'))return;openMessage(m)});card.querySelector('.msg-check').onchange=e=>{e.target.checked?state.selected.add(m.id):state.selected.delete(m.id);updateMobileSelectionBar()};card.querySelector('.star-btn').onclick=()=>toggleStar(m);card.oncontextmenu=e=>showMessageContext(e,m);list.appendChild(card)}if(!msgs.length)list.innerHTML='<div class="empty-reader" style="height:240px"><div class="mail-illustration">⌕</div><h2>Nenhum e-mail</h2><p>Não encontramos mensagens nesta visualização.</p></div>';updateMobileSelectionBar()}
@@ -113,10 +160,34 @@ function normalizeBody(body=''){
   return body.split(/\n{2,}/).map(p=>`<p>${escapeHtml(p).replace(/\n/g,'<br>')}</p>`).join('')
 }
 async function downloadAttachment(id,name='anexo'){try{const r=await fetch(API_ROOT+'/api/attachments/'+encodeURIComponent(id),{headers:{Authorization:'Bearer '+state.token}});if(!r.ok)throw new Error('Não foi possível baixar o anexo');const blob=await r.blob(),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}catch(e){toast(e.message,true)}}
-async function toggleStar(m){m.starred=!m.starred;renderMessages();if(state.current?.id===m.id)renderReader(m);try{await api('/api/messages/'+m.id,{method:'PATCH',body:JSON.stringify({action:'star',value:m.starred,folder:m.folder})});loadSummary()}catch(e){toast(e.message,true)}}
+async function toggleStar(m){
+  const before=!!m.starred;m.starred=!before;renderMessages();if(state.current?.id===m.id)renderReader(m);
+  try{await api('/api/messages/'+m.id,{method:'PATCH',body:JSON.stringify({action:'star',value:m.starred,folder:m.folder})});await loadSummary()}
+  catch(e){m.starred=before;renderMessages();if(state.current?.id===m.id)renderReader(m);toast(e.message,true)}
+}
 const folderNames={inbox:'Caixa de Entrada',starred:'Favoritos',sent:'Enviados',drafts:'Rascunhos',scheduled:'Agendados',archive:'Arquivo',spam:'Spam',trash:'Lixeira'};
-async function moveSelected(folder){const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);if(!ids.length)return toast('Selecione ao menos uma mensagem',true);for(const id of ids){const m=state.messages.find(x=>x.id===id)||state.current;await api('/api/messages/'+id,{method:'PATCH',body:JSON.stringify({action:'move',value:folder,folder:m?.folder||state.folder})})}toast('Mensagem(ns) movida(s)');state.current=null;$('#readerPane').innerHTML='<div class="empty-reader"><div class="mail-illustration">✉</div><h2>Selecione uma mensagem</h2><p>O conteúdo do e-mail aparecerá aqui.</p></div>';await refreshAll()}
-async function markSelected(read=true){const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);if(!ids.length)return toast('Selecione ao menos uma mensagem',true);for(const id of ids){const m=state.messages.find(x=>x.id===id)||state.current;await api('/api/messages/'+id,{method:'PATCH',body:JSON.stringify({action:'read',value:read,folder:m?.folder||state.folder})})}await refreshAll()}
+async function moveSelected(folder){
+  const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);
+  if(!ids.length)return toast('Selecione ao menos uma mensagem',true);
+  try{
+    for(const id of ids){const m=state.messages.find(x=>x.id===id)||state.current;await api('/api/messages/'+id,{method:'PATCH',body:JSON.stringify({action:'move',value:folder,folder:m?.folder||state.folder})})}
+    toast('Mensagem(ns) movida(s)');state.current=null;state.selected.clear();
+    $('#readerPane').innerHTML='<div class="empty-reader"><div class="mail-illustration">✉</div><h2>Selecione uma mensagem</h2><p>O conteúdo do e-mail aparecerá aqui.</p></div>';
+    await Promise.all([loadMessages(),loadSummary()]);
+  }catch(e){toast(e.message,true)}
+}
+async function markSelected(read=true){
+  const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);
+  if(!ids.length)return toast('Selecione ao menos uma mensagem',true);
+  try{
+    for(const id of ids){
+      const m=state.messages.find(x=>x.id===id)||(state.current?.id===id?state.current:null);
+      await api('/api/messages/'+id,{method:'PATCH',body:JSON.stringify({action:'read',value:read,folder:m?.folder||state.folder})});
+      if(m)m.read=read;
+    }
+    renderMessages();if(state.current)renderReader(state.current);await loadSummary();
+  }catch(e){toast(e.message,true)}
+}
 function renderComposeSignature(){const ed=$('#bodyEditor');ed.querySelector('[data-gift-signature]')?.remove();if(state.settings.signatureNew)appendSignature()}
 
 function resetCompose(){
@@ -296,6 +367,15 @@ function appendSignature(){
 }
 function prependSignature(){appendSignature()}
 function renderSignaturePreview(){const el=$('#signaturePreview');if(!el)return;const preview={...state.settings,signatureName:$('#signatureName')?.value||state.settings.signatureName,signatureCompany:$('#signatureCompany')?.value||state.settings.signatureCompany,signaturePhone:$('#signaturePhone')?.value||state.settings.signaturePhone,signatureCity:$('#signatureCity')?.value||state.settings.signatureCity,signatureSite:$('#signatureSite')?.value||state.settings.signatureSite};el.innerHTML=signatureHtml(preview)}
+function attachmentByteSize(a){
+  if(typeof a?.size==='number')return a.size;
+  const raw=String(a?.size||'').trim(),n=parseFloat(raw.replace(',','.'))||0;
+  if(/MB/i.test(raw))return Math.round(n*1024*1024);
+  if(/KB/i.test(raw))return Math.round(n*1024);
+  if(/GB/i.test(raw))return Math.round(n*1024*1024*1024);
+  if(a?.data)return Math.round(String(a.data).length*.75);
+  return n;
+}
 function renderComposeAttachments(){$('#attachmentPreview').innerHTML=state.attachments.map((a,i)=>`<span class="attachment-chip"><b>${(a.name||'FILE').split('.').pop().toUpperCase()}</b>${escapeHtml(a.name||'Anexo')} <button data-i="${i}">×</button></span>`).join('');$$('#attachmentPreview button').forEach(b=>b.onclick=()=>{state.attachments.splice(+b.dataset.i,1);renderComposeAttachments()})}
 async function buildAndSaveMessage(folder='sent',scheduledAt=null){
   const to=splitEmails($('#toField').value);
@@ -305,7 +385,8 @@ async function buildAndSaveMessage(folder='sent',scheduledAt=null){
   try{
     if(folder==='sent')await api('/api/send',{method:'POST',body:JSON.stringify(payload)});
     else await api('/api/messages',{method:'POST',body:JSON.stringify({...payload,body:payload.html,read:true,starred:false,labels:[]})});
-    await refreshAll();return true;
+    const jobs=[loadSummary(),loadStorage()];if(state.folder===folder)jobs.push(loadMessages());
+    await Promise.all(jobs);return true;
   }catch(e){toast(e.message,true);return false}
 }
 async function saveDraftInternal(){
@@ -314,10 +395,20 @@ async function saveDraftInternal(){
   if(btn){btn.disabled=false;btn.textContent=btn.dataset.label||'Salvar rascunho'}
   if(ok)toast('Rascunho salvo');return ok;
 }
+function setComposeBusy(on,label='Enviando...'){
+  state.composeBusy=!!on;
+  const send=$('#sendBtn'),menu=$('#sendMenuBtn'),draft=$('#saveDraftBtn');
+  if(send){if(on&&!send.dataset.label)send.dataset.label=send.textContent;send.disabled=on;send.textContent=on?label:(send.dataset.label||'Enviar');if(!on)delete send.dataset.label}
+  if(menu)menu.disabled=on;if(draft)draft.disabled=on;
+}
 async function sendMessage(folder='sent',scheduledAt=null){
-  const ok=await buildAndSaveMessage(folder,scheduledAt);if(!ok)return;
-  toast(folder==='sent'?'E-mail enviado':folder==='scheduled'?'E-mail agendado':'Rascunho salvo');
-  hideComposeWindow(true);
+  if(state.composeBusy)return;
+  setComposeBusy(true,folder==='scheduled'?'Agendando...':'Enviando...');
+  try{
+    const ok=await buildAndSaveMessage(folder,scheduledAt);if(!ok)return;
+    toast(folder==='sent'?'E-mail enviado':folder==='scheduled'?'E-mail agendado':'Rascunho salvo');
+    hideComposeWindow(true);
+  }finally{setComposeBusy(false)}
 }
 function fillSettings(){const s=state.settings;$('#settingsLoggedEmail').textContent=s.email||'';$('#setDisplayName').value=s.displayName||'';$('#setEmail').value=s.email||'';$('#setOrganization').value=s.organization||'';const unifiedPhone=s.signaturePhone||s.phone||'(31) 3772-6397';$('#setPhone').value=unifiedPhone;$('#setWebsite').value=s.website||'';$('#signatureName').value=s.signatureName||s.displayName||'';$('#signatureCompany').value=s.signatureCompany||'GIFT Excellence';$('#signaturePhone').value=unifiedPhone;$('#signatureCity').value=s.signatureCity||'Sete Lagoas - MG';$('#signatureSite').value=s.signatureSite||s.website||'www.giftexcellence.com.br';$('#signatureNew').checked=!!s.signatureNew;$('#signatureReplies').checked=!!s.signatureReplies;$('#forwardEnabled').checked=!!s.forwardEnabled;$('#forwardAddress').value=s.forwardAddress||'';$('#forwardKeepCopy').checked=s.forwardKeepCopy!==false;$('#vacationEnabled').checked=!!s.vacation;$('#vacationText').value=s.vacationText||'';$('#vacationSubject').value=s.vacationSubject||'Resposta automática';$('#vacationStart').value=s.vacationStart||'';$('#vacationEnd').value=s.vacationEnd||'';$('#twoFactor').checked=!!s.twoFactor;$('#suspiciousLogin').checked=s.suspiciousLogin!==false;$('#externalImages').checked=!!s.externalImages;$('#desktopNotifications').checked=s.desktopNotifications!==false;$('#soundNotifications').checked=!!s.soundNotifications;$('#notifyImportant').checked=s.notifyImportant!==false;$('#setTheme').value=s.theme||'light';$('#setDensity').value=s.density||'comfortable';$('#setPreview').value=s.preview||'split';renderAliasList();renderBlockedList();renderRulesList();renderSignaturePreview()}
 function openSettings(tab='account'){document.body.classList.add('settings-open');document.body.classList.remove('mobile-header-hidden');$('#settingsModal').classList.remove('hidden');fillSettings();switchSettingsTab(tab)}
@@ -390,7 +481,7 @@ $('#loginForm').onsubmit=async e=>{
   try{
     const email=$('#loginEmail').value.trim();
     const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password:$('#loginPassword').value})});
-    state.token=r.token;state.user=r.user||{email};
+    state.token=r.token;state.user=r.user||{email};resetMailboxUiState(true);
     if($('#rememberMe').checked){
       localStorage.setItem('giftToken',r.token);
       localStorage.setItem('giftRememberedEmail',email);
@@ -432,7 +523,7 @@ $('#moreBtn').onclick=e=>{e.stopPropagation();showMenu(e.currentTarget,[
 ])};
 $('#readerMoreBtn').onclick=e=>{e.stopPropagation();if(state.current)showReaderContext(e,state.current)};$('#themeBtn').onclick=()=>{state.settings.theme=document.body.classList.contains('dark')?'light':'dark';saveLocalSettings();applySettings()};$('#mobileSearchBtn').onclick=e=>{e.stopPropagation();document.body.classList.toggle('mobile-search-open');if(document.body.classList.contains('mobile-search-open'))setTimeout(()=>$('#searchInput')?.focus(),40)};$('#profileTheme').onclick=()=>{$('#themeBtn').click();$('#profileMenu').classList.add('hidden')};$('#mobileComposeFab').onclick=()=>requestOpenCompose('new');
 $('#profileBtn').onclick=e=>{e.stopPropagation();$('#profileMenu').classList.toggle('hidden')};document.addEventListener('click',e=>{$('#profileMenu').classList.add('hidden');$('#contextMenu').classList.add('hidden');if(innerWidth<820&&$('#sidebar').classList.contains('open')&&!$('#sidebar').contains(e.target)&&!$('#mobileMenu').contains(e.target))closeMobileSidebar()});$('#settingsBtn').onclick=()=>openSettings();$('#profileSettings').onclick=()=>openSettings('account');$('#profilePassword').onclick=()=>openSettings('password');
-async function logout(){try{await api('/api/auth/logout',{method:'POST'})}catch{}state.token='';state.user=null;localStorage.removeItem('giftToken');sessionStorage.removeItem('giftToken');showLogin()}$('#profileLogout').onclick=requestLogout;
+async function logout(){try{await api('/api/auth/logout',{method:'POST'})}catch{}state.token='';state.user=null;state.settings={};state.attachments=[];localStorage.removeItem('giftToken');sessionStorage.removeItem('giftToken');showLogin()}$('#profileLogout').onclick=requestLogout;
 $('#newFolderBtn').onclick=()=>{const n=prompt('Nome da nova pasta:');if(n){state.settings.customFolders=state.settings.customFolders||[];if(!state.settings.customFolders.includes(n))state.settings.customFolders.push(n);saveLocalSettings();renderCustomFolders()}};
 function closeMobileSidebar(){const sb=$('#sidebar'),ov=$('#mobileNavOverlay');sb?.classList.remove('open');ov?.classList.add('hidden');document.body.classList.remove('mobile-nav-open')}
 function setMobileSidebar(open){const sb=$('#sidebar'),ov=$('#mobileNavOverlay');if(!sb)return;if(innerWidth>=820){closeMobileSidebar();return}sb.classList.toggle('open',!!open);ov?.classList.toggle('hidden',!open);document.body.classList.toggle('mobile-nav-open',!!open)}
@@ -442,7 +533,17 @@ $('#mobileNavOverlay')?.addEventListener('click',closeMobileSidebar);
 
 $('#closeCompose').onclick=()=>openComposeDialog(composeHasContent()?'close-dirty':'close-empty');$('#minimizeCompose').onclick=()=>$('#composeWindow').classList.toggle('min');$('#maximizeCompose').onclick=()=>$('#composeWindow').classList.toggle('max');$('#ccBccBtn').onclick=()=>$('#ccBccFields').classList.toggle('hidden');
 $$('.editor-toolbar [data-cmd]').forEach(b=>b.onclick=()=>{const cmd=b.dataset.cmd;if(cmd==='createLink'){const u=prompt('URL:');if(u)document.execCommand('createLink',false,u)}else if(cmd==='insertImage'){const u=prompt('URL da imagem:');if(u)document.execCommand('insertImage',false,u)}else if(cmd==='foreColor'){const c=prompt('Cor (ex.: #ff0000):','#111111');if(c)document.execCommand('foreColor',false,c)}else document.execCommand(cmd,false,null);focusMessageArea()});$('#fontFamily').onchange=e=>document.execCommand('fontName',false,e.target.value);$('#fontSize').onchange=e=>document.execCommand('fontSize',false,e.target.value==='12'?'2':e.target.value==='14'?'3':e.target.value==='16'?'4':'5');
-$('#attachmentInput').onchange=async e=>{for(const f of [...e.target.files]){let data='';if(f.size<5*1024*1024)data=await new Promise(ok=>{const r=new FileReader();r.onload=()=>ok(r.result);r.readAsDataURL(f)});state.attachments.push({name:f.name,size:(f.size/1024).toFixed(0)+' KB',data})}renderComposeAttachments();e.target.value=''};
+$('#attachmentInput').onchange=async e=>{
+  const MAX_FILE=5*1024*1024,MAX_TOTAL=15*1024*1024;
+  let total=state.attachments.reduce((n,a)=>n+attachmentByteSize(a),0);
+  for(const f of [...e.target.files]){
+    if(f.size>MAX_FILE){toast(f.name+' excede o limite de 5 MB',true);continue}
+    if(total+f.size>MAX_TOTAL){toast('O total de anexos não pode ultrapassar 15 MB',true);break}
+    const data=await new Promise((ok,fail)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=fail;r.readAsDataURL(f)});
+    state.attachments.push({name:f.name,size:f.size,contentType:f.type||'application/octet-stream',data});total+=f.size;
+  }
+  renderComposeAttachments();e.target.value='';
+};
 $('#insertDrive').onclick=()=>toast('Use o botão de anexo para selecionar arquivos deste computador.');$('#insertLink').onclick=()=>{const u=prompt('Cole o link:');if(u)document.execCommand('insertHTML',false,`<a href="${escapeHtml(u)}">${escapeHtml(u)}</a>`)};$('#insertEmoji').onclick=()=>document.execCommand('insertText',false,'🙂');$('#toggleSignature').onclick=()=>{const ed=$('#bodyEditor'),sig=ed.querySelector('[data-gift-signature]');sig?sig.remove():appendSignature()};$('#saveDraftBtn').onclick=()=>openComposeDialog('save-draft');$('#discardCompose').onclick=()=>openComposeDialog('discard');$('#sendBtn').onclick=()=>sendMessage('sent');$('#sendMenuBtn').onclick=()=>$('#scheduleMenu').classList.toggle('hidden');$$('#scheduleMenu [data-minutes]').forEach(b=>b.onclick=()=>{const d=new Date(Date.now()+(+b.dataset.minutes)*60000);sendMessage('scheduled',d.toISOString())});$('#customScheduleBtn').onclick=()=>{$('#hiddenDateTime').showPicker();$('#hiddenDateTime').onchange=()=>{const d=new Date($('#hiddenDateTime').value);if(d>new Date())sendMessage('scheduled',d.toISOString());else toast('Escolha uma data futura',true)}};
 $('#composeDialogCancel').onclick=()=>{pendingComposeOpen=null;closeComposeDialog()};$('#composeDialogSecondary').onclick=performDialogSecondary;$('#composeDialogPrimary').onclick=performDialogPrimary;$('#composeDialog').addEventListener('click',e=>{if(e.target.id==='composeDialog'){pendingComposeOpen=null;closeComposeDialog()}});$('#actionDialogCancel').onclick=closeActionDialog;$('#actionDialogConfirm').onclick=confirmActionDialog;$('#actionDialog').addEventListener('click',e=>{if(e.target.id==='actionDialog')closeActionDialog()});
 $('#closeSettings').onclick=$('#cancelSettings').onclick=()=>{document.body.classList.remove('settings-open');$('#settingsModal').classList.add('hidden')};$$('#settingsNav button').forEach(b=>b.onclick=()=>switchSettingsTab(b.dataset.tab));$('#saveSettingsBtn').onclick=saveSettings;['signatureName','signatureCompany','signaturePhone','signatureCity','signatureSite'].forEach(id=>$('#'+id)?.addEventListener('input',renderSignaturePreview));$('#setPhone')?.addEventListener('input',e=>{if($('#signaturePhone'))$('#signaturePhone').value=e.target.value;renderSignaturePreview()});$('#signaturePhone')?.addEventListener('input',e=>{if($('#setPhone'))$('#setPhone').value=e.target.value});$('#signatureLogoInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;if(file.size>4*1024*1024){e.target.value='';return toast('A imagem da assinatura deve ter no máximo 4 MB',true)}const data=await new Promise((ok,fail)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=fail;r.readAsDataURL(file)});try{const out=await api('/api/signature-logo',{method:'POST',body:JSON.stringify({name:file.name,type:file.type,data})});state.settings.signatureLogoUrl=out.url;saveLocalSettings();renderSignaturePreview();toast('Imagem da assinatura atualizada')}catch(err){toast(err.message,true)}e.target.value=''};$('#signatureLogoReset').onclick=async()=>{try{const out=await api('/api/signature-logo',{method:'DELETE'});state.settings.signatureLogoUrl=out.url;saveLocalSettings();renderSignaturePreview();toast('Logo padrão restaurado')}catch(e){toast(e.message,true)}};

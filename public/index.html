@@ -55,7 +55,7 @@
       <header class="topbar">
         <button class="mobile-menu" id="mobileMenu" aria-label="Menu">☰</button>
         <span class="mobile-title">GIFT Mail</span>
-        <div class="search-box"><span>⌕</span><input id="searchInput" placeholder="Pesquisar e-mails, remetentes ou assuntos..."><button id="advancedSearchBtn" title="Pesquisa avançada">⌄</button></div>
+        <div class="search-box"><span>⌕</span><input id="searchInput" name="gift-mail-search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Pesquisar e-mails, remetentes ou assuntos..."><button id="advancedSearchBtn" title="Pesquisa avançada">⌄</button></div>
         <div class="top-right">
           <button class="top-icon mobile-search-btn" id="mobileSearchBtn" title="Pesquisar" aria-label="Pesquisar"><span class="mail-icon" data-mail-icon="search"></span></button>
           <button class="top-icon" id="themeBtn" title="Tema"><span class="mail-icon" data-mail-icon="sun"></span></button>
@@ -96,9 +96,9 @@
       </div>
 
       <section id="advancedSearch" class="advanced-search hidden">
-        <input id="searchFrom" placeholder="De">
-        <input id="searchTo" placeholder="Para">
-        <input id="searchSubject" placeholder="Assunto contém">
+        <input id="searchFrom" name="gift-search-from" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="De">
+        <input id="searchTo" name="gift-search-to" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Para">
+        <input id="searchSubject" name="gift-search-subject" autocomplete="off" spellcheck="false" placeholder="Assunto contém">
         <select id="searchHasAttachment"><option value="">Anexo: qualquer</option><option value="yes">Com anexo</option><option value="no">Sem anexo</option></select>
         <button id="applyAdvancedSearch" class="primary">Pesquisar</button>
         <button id="clearAdvancedSearch">Limpar</button>
