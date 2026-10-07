@@ -90,8 +90,8 @@ function resetMailboxUiState(clearSearch=false){
     ['searchInput','searchFrom','searchTo','searchSubject'].forEach(id=>{const el=$('#'+id);if(el)el.value=''});
     const att=$('#searchHasAttachment');if(att)att.value='';
   }
-  $('#folderNav .nav-item').forEach(x=>x.classList.toggle('active',x.dataset.folder==='inbox'));
-  $('.tab').forEach(x=>x.classList.toggle('active',x.dataset.filter==='all'));
+  $$('#folderNav .nav-item').forEach(x=>x.classList.toggle('active',x.dataset.folder==='inbox'));
+  $$('.tab').forEach(x=>x.classList.toggle('active',x.dataset.filter==='all'));
   const list=$('#messageList');if(list){list.innerHTML='';list.classList.remove('is-loading')}
   const reader=$('#readerPane');if(reader){reader.classList.remove('mobile-open');reader.innerHTML='<div class="empty-reader"><div class="mail-illustration">✉</div><h2>Selecione uma mensagem</h2><p>O conteúdo do e-mail aparecerá aqui.</p></div>'}
   document.body.classList.remove('mobile-reader-open','mobile-search-open','mobile-selection-active','mobile-header-hidden');
