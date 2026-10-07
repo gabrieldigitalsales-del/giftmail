@@ -128,18 +128,50 @@ async function rowToMessage(env,r){return {id:r.id,folder:r.folder,from:r.from_a
 async function saveAttachment(env,messageId,a){
   const id=newId('a'),key=`${messageId}/${id}-${String(a.name||a.filename||'file').replace(/[^a-zA-Z0-9._-]/g,'_')}`;
   let bytes;
-  if(a.data){const b64=String(a.data).split(',').pop();bytes=b64ToBytes(b64)} else if(a.raw){bytes=/base64/i.test(a.cte||'')?b64ToBytes(String(a.raw).replace(/\s/g,'')):new TextEncoder().encode(String(a.raw))} else return;
+  if(a.bytes instanceof Uint8Array)bytes=a.bytes;
+  else if(a.bytes instanceof ArrayBuffer)bytes=new Uint8Array(a.bytes);
+  else if(a.data){const b64=String(a.data).split(',').pop();bytes=b64ToBytes(b64)}
+  else if(a.raw){
+    if(/base64/i.test(a.cte||''))bytes=b64ToBytes(String(a.raw).replace(/\s/g,''));
+    else if(/quoted-printable/i.test(a.cte||''))bytes=qpToBytes(a.raw);
+    else bytes=new TextEncoder().encode(String(a.raw));
+  } else return;
   await env.ATTACHMENTS.put(key,bytes,{httpMetadata:{contentType:a.contentType||'application/octet-stream'}});
   await env.DB.prepare(`INSERT INTO giftmail_attachments(id,message_id,filename,content_type,size_bytes,r2_key) VALUES(?,?,?,?,?,?)`).bind(id,messageId,a.name||a.filename||'arquivo',a.contentType||'application/octet-stream',bytes.byteLength,key).run();
+}
+
+async function resolveAttachmentForSend(env,user,a){
+  if(a.data){
+    const content=String(a.data).split(',').pop();
+    return {filename:a.name||a.filename||'arquivo',content,contentType:a.contentType||'application/octet-stream',bytes:b64ToBytes(content)};
+  }
+  if(a.id){
+    const row=await env.DB.prepare(`SELECT a.* FROM giftmail_attachments a JOIN giftmail_messages m ON m.id=a.message_id WHERE a.id=? AND m.owner_user_id=?`).bind(a.id,user.id).first();
+    if(!row)throw new Error('Anexo não encontrado');
+    const obj=await env.ATTACHMENTS.get(row.r2_key);
+    if(!obj)throw new Error('Arquivo do anexo não encontrado');
+    const bytes=new Uint8Array(await obj.arrayBuffer());
+    return {filename:row.filename||a.name||'arquivo',content:bytesToB64(bytes),contentType:row.content_type||a.contentType||'application/octet-stream',bytes};
+  }
+  return null;
 }
 async function sendViaResend(env,user,payload,save=true){
   const to=payload.to||[]; if(!to.length)throw new Error('Informe ao menos um destinatário');
   const settings=await env.DB.prepare(`SELECT display_name FROM giftmail_settings WHERE user_id=?`).bind(user.id).first();
-  const atts=[]; for(const a of payload.attachments||[]){if(a.data)atts.push({filename:a.name,content:String(a.data).split(',').pop()})}
+  const resolved=[];
+  for(const a of payload.attachments||[]){
+    const r=await resolveAttachmentForSend(env,user,a);
+    if(r)resolved.push(r);
+  }
+  const atts=resolved.map(a=>({filename:a.filename,content:a.content}));
   const req={from:`${settings?.display_name||user.display_name||'GIFT Excellence'} <${user.email}>`,to,cc:payload.cc||[],bcc:payload.bcc||[],subject:payload.subject||'(sem assunto)',html:payload.html||payload.body||'',attachments:atts};
   const rr=await fetch('https://api.resend.com/emails',{method:'POST',headers:{authorization:`Bearer ${env.RESEND_API_KEY}`,'content-type':'application/json'},body:JSON.stringify(req)});
   const data=await rr.json().catch(()=>({})); if(!rr.ok)throw new Error(data.message||'Falha ao enviar e-mail');
-  if(save){const id=newId();await env.DB.prepare(`INSERT INTO giftmail_messages(id,owner_user_id,folder,from_address,to_json,cc_json,bcc_json,subject,body_html,body_text,message_id,read_flag,sent_at,created_at,raw_size) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'),?)`).bind(id,user.id,'sent',user.email,JSON.stringify(to),JSON.stringify(payload.cc||[]),JSON.stringify(payload.bcc||[]),payload.subject||'(sem assunto)',payload.html||'',stripHtml(payload.html||''),data.id||'',1,JSON.stringify(payload).length).run();for(const a of payload.attachments||[])await saveAttachment(env,id,a)}
+  if(save){
+    const id=newId();
+    await env.DB.prepare(`INSERT INTO giftmail_messages(id,owner_user_id,folder,from_address,to_json,cc_json,bcc_json,subject,body_html,body_text,message_id,read_flag,sent_at,created_at,raw_size) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'),?)`).bind(id,user.id,'sent',user.email,JSON.stringify(to),JSON.stringify(payload.cc||[]),JSON.stringify(payload.bcc||[]),payload.subject||'(sem assunto)',payload.html||'',stripHtml(payload.html||''),data.id||'',1,JSON.stringify(payload).length).run();
+    for(const a of resolved)await saveAttachment(env,id,{name:a.filename,contentType:a.contentType,bytes:a.bytes});
+  }
   return data;
 }
 async function processScheduled(env){
