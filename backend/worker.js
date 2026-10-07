@@ -176,7 +176,13 @@ async function sendViaResend(env,user,payload,save=true){
 }
 async function processScheduled(env){
   const {results=[]}=await env.DB.prepare(`SELECT m.*,u.email,u.display_name,u.role FROM giftmail_messages m JOIN giftmail_users u ON u.id=m.owner_user_id WHERE m.folder='scheduled' AND m.scheduled_at IS NOT NULL AND m.scheduled_at<=datetime('now') LIMIT 25`).all();
-  for(const r of results){try{await sendViaResend(env,{id:r.owner_user_id,email:r.email,display_name:r.display_name,role:r.role},{to:safeJson(r.to_json),cc:safeJson(r.cc_json),bcc:safeJson(r.bcc_json),subject:r.subject,html:r.body_html},false);await env.DB.prepare(`UPDATE giftmail_messages SET folder='sent',sent_at=datetime('now') WHERE id=?`).bind(r.id).run()}catch(e){console.log('scheduled send failed',r.id,e.message)}}
+  for(const r of results){
+    try{
+      const attachments=await attachmentsFor(env,r.id);
+      await sendViaResend(env,{id:r.owner_user_id,email:r.email,display_name:r.display_name,role:r.role},{to:safeJson(r.to_json),cc:safeJson(r.cc_json),bcc:safeJson(r.bcc_json),subject:r.subject,html:r.body_html,attachments},false);
+      await env.DB.prepare(`UPDATE giftmail_messages SET folder='sent',sent_at=datetime('now') WHERE id=?`).bind(r.id).run()
+    }catch(e){console.log('scheduled send failed',r.id,e.message)}
+  }
 }
 async function api(req,env){
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:CORS});
@@ -236,7 +242,15 @@ async function api(req,env){
     const {results=[]}=await env.DB.prepare(stmt).bind(...binds).all();const out=[];for(const r of results)out.push(await rowToMessage(env,r));return json(out)
   }
   if(p==='/api/messages'&&req.method==='POST'){
-    const b=await req.json(),id=newId();await env.DB.prepare(`INSERT INTO giftmail_messages(id,owner_user_id,folder,from_address,to_json,cc_json,bcc_json,subject,body_html,body_text,read_flag,starred,labels_json,scheduled_at,created_at,raw_size) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),?)`).bind(id,user.id,b.folder||'drafts',user.email,JSON.stringify(b.to||[]),JSON.stringify(b.cc||[]),JSON.stringify(b.bcc||[]),b.subject||'(sem assunto)',b.body||b.html||'',stripHtml(b.body||b.html||''),1,b.starred?1:0,JSON.stringify(b.labels||[]),b.scheduledAt||null,JSON.stringify(b).length).run();for(const a of b.attachments||[])await saveAttachment(env,id,a);return json(await rowToMessage(env,await env.DB.prepare(`SELECT * FROM giftmail_messages WHERE id=?`).bind(id).first()))
+    const b=await req.json(),id=newId();
+    await env.DB.prepare(`INSERT INTO giftmail_messages(id,owner_user_id,folder,from_address,to_json,cc_json,bcc_json,subject,body_html,body_text,read_flag,starred,labels_json,scheduled_at,created_at,raw_size) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),?)`).bind(id,user.id,b.folder||'drafts',user.email,JSON.stringify(b.to||[]),JSON.stringify(b.cc||[]),JSON.stringify(b.bcc||[]),b.subject||'(sem assunto)',b.body||b.html||'',stripHtml(b.body||b.html||''),1,b.starred?1:0,JSON.stringify(b.labels||[]),b.scheduledAt||null,JSON.stringify(b).length).run();
+    for(const a of b.attachments||[]){
+      if(a.id){
+        const r=await resolveAttachmentForSend(env,user,a);
+        if(r)await saveAttachment(env,id,{name:r.filename,contentType:r.contentType,bytes:r.bytes});
+      }else await saveAttachment(env,id,a);
+    }
+    return json(await rowToMessage(env,await env.DB.prepare(`SELECT * FROM giftmail_messages WHERE id=?`).bind(id).first()))
   }
   const mm=p.match(/^\/api\/messages\/([^/]+)$/); if(mm&&req.method==='PATCH'){
     const b=await req.json(),id=mm[1],m=await env.DB.prepare(`SELECT * FROM giftmail_messages WHERE id=? AND owner_user_id=?`).bind(id,user.id).first();if(!m)return json({error:'Mensagem não encontrada'},404);
