@@ -70,6 +70,18 @@ function loadLocalSettings(email='default'){
     return scoped?JSON.parse(scoped):{};
   }catch{return {}}
 }
+function initSearchAutofillGuard(){
+  const el=$('#searchInput');if(!el)return;
+  let userActivated=false;
+  const clearGhost=()=>{if(!userActivated){el.value='';el.setAttribute('readonly','')}};
+  const activate=()=>{userActivated=true;el.removeAttribute('readonly');if(!el.matches(':focus'))el.focus()};
+  ['pointerdown','touchstart'].forEach(ev=>el.addEventListener(ev,activate,{passive:true}));
+  el.addEventListener('keydown',()=>{userActivated=true;el.removeAttribute('readonly')});
+  el.addEventListener('focus',()=>{userActivated=true;el.removeAttribute('readonly')});
+  window.addEventListener('pageshow',()=>{userActivated=false;clearGhost();setTimeout(clearGhost,120);setTimeout(clearGhost,700)});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!userActivated)setTimeout(clearGhost,80)});
+  clearGhost();setTimeout(clearGhost,120);setTimeout(clearGhost,700);
+}
 function resetMailboxUiState(clearSearch=false){
   messagesRequestController?.abort();messagesRequestController=null;messagesRequestSeq++;
   state.messages=[];state.selected.clear();state.current=null;state.folder='inbox';state.filter='all';
@@ -85,7 +97,7 @@ function resetMailboxUiState(clearSearch=false){
   document.body.classList.remove('mobile-reader-open','mobile-search-open','mobile-selection-active','mobile-header-hidden');
 }
 function showLogin(){
-  resetMailboxUiState(true);state.attachments=[];
+  resetMailboxUiState(true);state.attachments=[];const search=$('#searchInput');if(search){search.value='';search.setAttribute('readonly','')}
   $('#appView').classList.add('hidden');
   $('#loginView').classList.remove('hidden');
   const compose=$('#composeWindow');if(compose){compose.classList.add('hidden');compose.classList.remove('min','max','compose-opening','compose-closing')}
@@ -481,7 +493,7 @@ $('#loginForm').onsubmit=async e=>{
   try{
     const email=$('#loginEmail').value.trim();
     const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password:$('#loginPassword').value})});
-    state.token=r.token;state.user=r.user||{email};resetMailboxUiState(true);
+    state.token=r.token;state.user=r.user||{email};resetMailboxUiState(true);const search=$('#searchInput');if(search){search.value='';search.setAttribute('readonly','')}
     if($('#rememberMe').checked){
       localStorage.setItem('giftToken',r.token);
       localStorage.setItem('giftRememberedEmail',email);
@@ -648,4 +660,4 @@ function initMobileHeaderAutoHide(){
   window.addEventListener('orientationchange',()=>setTimeout(showHeader,120));
 }
 initMobileHeaderAutoHide();
-applyMailIcons();updateFolderActions();const rememberedEmail=localStorage.getItem('giftRememberedEmail');if(rememberedEmail)$('#loginEmail').value=rememberedEmail;if(state.token)showApp();else showLogin();
+initSearchAutofillGuard();applyMailIcons();updateFolderActions();const rememberedEmail=localStorage.getItem('giftRememberedEmail');if(rememberedEmail)$('#loginEmail').value=rememberedEmail;if(state.token)showApp();else showLogin();
