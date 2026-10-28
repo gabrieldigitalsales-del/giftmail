@@ -35,9 +35,9 @@ async function recordLoginFailure(env,key){
     .bind(key,failures,windowStart,blockedUntil).run();
 }
 async function clearLoginFailures(env,key){await env.DB.prepare(`DELETE FROM giftmail_login_attempts WHERE attempt_key=?`).bind(key).run()}
-async function createNotification(env,userId,messageId,title,body){
+async function createNotification(env,userId,messageId,title,body,type='new_message'){
   await env.DB.prepare(`INSERT INTO giftmail_notifications(id,user_id,message_id,type,title,body) VALUES(?,?,?,?,?,?)`)
-    .bind(newId('n'),userId,messageId,'new_message',String(title||'Novo e-mail').slice(0,180),String(body||'').slice(0,240)).run();
+    .bind(newId('n'),userId,messageId||null,type,String(title||'Notificação').slice(0,180),String(body||'').slice(0,240)).run();
 }
 async function verifyResendWebhook(req,env,rawBody){
   const secret=env.RESEND_WEBHOOK_SECRET;if(!secret)return false;
@@ -263,7 +263,10 @@ async function api(req,env){
     await clearLoginFailures(env,attemptKey);
     const raw=crypto.randomUUID()+crypto.randomUUID(),th=await sha256(raw),exp=new Date(Date.now()+7*86400000).toISOString(),ua=String(req.headers.get('user-agent')||'').slice(0,300);
     await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE expires_at<=datetime('now')`).run();
+    const known=await env.DB.prepare(`SELECT COUNT(*) c FROM giftmail_sessions WHERE user_id=? AND ip=? AND user_agent=?`).bind(u.id,ip,ua).first();
     await env.DB.prepare(`INSERT INTO giftmail_sessions(token_hash,user_id,expires_at,ip,user_agent,last_seen_at) VALUES(?,?,?,?,?,datetime('now'))`).bind(th,u.id,exp,ip,ua).run();
+    const stLogin=await env.DB.prepare(`SELECT suspicious_login FROM giftmail_settings WHERE user_id=?`).bind(u.id).first();
+    if(Number(known?.c||0)===0&&stLogin?.suspicious_login!==0)await createNotification(env,u.id,null,'Novo login detectado',ip?'Acesso por um novo navegador ou endereço IP. IP: '+ip:'Acesso por um novo navegador ou dispositivo.','security');
     await auditEvent(env,u.id,'login_success',{ip,userAgent:ua});
     return json({token:raw,demo:false,user:{email:u.email,name:u.display_name,role:u.role}})
   }
@@ -377,7 +380,8 @@ async function api(req,env){
     }
     return json(await rowToMessage(env,await env.DB.prepare(`SELECT * FROM giftmail_messages WHERE id=?`).bind(id).first()))
   }
-  const mm=p.match(/^\/api\/messages\/([^/]+)$/); if(mm&&req.method==='PATCH'){
+  const mm=p.match(/^\/api\/messages\/([^/]+)$/); if(mm&&req.method==='GET'){const m=await env.DB.prepare(`SELECT * FROM giftmail_messages WHERE id=? AND owner_user_id=?`).bind(mm[1],user.id).first();if(!m)return json({error:'Mensagem não encontrada'},404);return json(await rowToMessage(env,m))}
+  if(mm&&req.method==='PATCH'){
     const b=await req.json(),id=mm[1],m=await env.DB.prepare(`SELECT * FROM giftmail_messages WHERE id=? AND owner_user_id=?`).bind(id,user.id).first();if(!m)return json({error:'Mensagem não encontrada'},404);
     if(b.action==='read')await env.DB.prepare(`UPDATE giftmail_messages SET read_flag=? WHERE id=?`).bind(b.value?1:0,id).run();else if(b.action==='star')await env.DB.prepare(`UPDATE giftmail_messages SET starred=? WHERE id=?`).bind(b.value?1:0,id).run();else if(b.action==='move')await env.DB.prepare(`UPDATE giftmail_messages SET folder=? WHERE id=?`).bind(b.value,id).run();else if(b.action==='label'){const labels=safeJson(m.labels_json);if(b.value&&!labels.includes(b.value))labels.push(b.value);await env.DB.prepare(`UPDATE giftmail_messages SET labels_json=? WHERE id=?`).bind(JSON.stringify(labels),id).run()}else if(b.action==='unlabel'){const labels=safeJson(m.labels_json).filter(x=>x!==b.value);await env.DB.prepare(`UPDATE giftmail_messages SET labels_json=? WHERE id=?`).bind(JSON.stringify(labels),id).run()}return json(await rowToMessage(env,await env.DB.prepare(`SELECT * FROM giftmail_messages WHERE id=?`).bind(id).first()))
   }
@@ -400,7 +404,7 @@ async function api(req,env){
   if(p==='/api/settings'&&req.method==='GET'){
     const st=await env.DB.prepare(`SELECT * FROM giftmail_settings WHERE user_id=?`).bind(user.id).first();
     return json({
-      displayName:st?.display_name||user.display_name,email:user.email,organization:st?.signature_company||'GIFT Excellence',
+      displayName:st?.display_name||user.display_name,email:user.email,role:user.role,organization:st?.signature_company||'GIFT Excellence',
       phone:st?.signature_phone||'(31) 3772-6397',website:st?.signature_site||'www.giftexcellence.com.br',
       signatureName:st?.signature_name||st?.display_name||user.display_name,signatureCompany:st?.signature_company||'GIFT Excellence',
       signaturePhone:st?.signature_phone||'(31) 3772-6397',signatureCity:st?.signature_city||'Sete Lagoas - MG',
@@ -412,7 +416,7 @@ async function api(req,env){
       forwardEnabled:!!st?.forward_enabled,forwardAddress:st?.forward_address||'',forwardKeepCopy:st?.forward_keep_copy!==0,
       blocked:safeJson(st?.blocked_json),rules:safeJson(st?.rules_json),aliases:safeJson(st?.aliases_json),customFolders:(()=>{const x=safeJson(st?.custom_folders_json);return x.length?x:['Comercial','Compras','Engenharia','Financeiro','Projetos']})(),
       externalImages:!!st?.external_images,desktopNotifications:st?.desktop_notifications!==0,notifyImportant:st?.notify_important!==0,
-      preview:st?.preview||'split',notifications:!!st?.notifications,sound:!!st?.sound
+      preview:st?.preview||'split',suspiciousLogin:st?.suspicious_login!==0,notifications:!!st?.notifications,sound:!!st?.sound
     })
   }
   if(p==='/api/settings'&&req.method==='POST'){
@@ -435,7 +439,7 @@ async function api(req,env){
         b.blocked==null?null:JSON.stringify(b.blocked),b.rules==null?null:JSON.stringify(b.rules),b.aliases==null?null:JSON.stringify(b.aliases),
         b.customFolders==null?null:JSON.stringify(b.customFolders),b.externalImages==null?null:(b.externalImages?1:0),
         b.desktopNotifications==null?null:(b.desktopNotifications?1:0),b.notifyImportant==null?null:(b.notifyImportant?1:0),
-        b.preview??null,b.notifications==null?null:(b.notifications?1:0),b.sound==null?null:(b.sound?1:0),user.id
+        b.preview??null,b.suspiciousLogin==null?null:(b.suspiciousLogin?1:0),b.notifications==null?null:(b.notifications?1:0),b.sound==null?null:(b.sound?1:0),user.id
       ).run();
     return json({ok:true})
   }
