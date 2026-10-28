@@ -14,6 +14,7 @@ async function hashPassword(password,saltB64){
   return bytesToB64(new Uint8Array(bits));
 }
 const newId=(p='m')=>p+crypto.randomUUID().replace(/-/g,'');
+function logEvent(event,data={}){try{console.log(JSON.stringify({event,ts:new Date().toISOString(),...data}))}catch{}}
 function safeJson(s,f=[]){try{return JSON.parse(s||'')}catch{return f}}
 function stripHtml(s=''){return String(s).replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim()}
 function normalizeCharset(cs='utf-8'){
@@ -165,7 +166,7 @@ async function sendViaResend(env,user,payload,save=true){
   const atts=resolved.map(a=>({filename:a.filename,content:a.content}));
   const req={from:`${settings?.display_name||user.display_name||'GIFT Excellence'} <${user.email}>`,to,cc:payload.cc||[],bcc:payload.bcc||[],subject:payload.subject||'(sem assunto)',html:payload.html||payload.body||'',attachments:atts};
   const rr=await fetch('https://api.resend.com/emails',{method:'POST',headers:{authorization:`Bearer ${env.RESEND_API_KEY}`,'content-type':'application/json'},body:JSON.stringify(req)});
-  const data=await rr.json().catch(()=>({})); if(!rr.ok)throw new Error(data.message||'Falha ao enviar e-mail');
+  const data=await rr.json().catch(()=>({})); if(!rr.ok){logEvent('send_failed',{user:user.email,status:rr.status,message:data.message||''});throw new Error(data.message||'Falha ao enviar e-mail')} logEvent('send_ok',{user:user.email,toCount:to.length,attachments:atts.length});
   if(save){
     const id=newId();
     await env.DB.prepare(`INSERT INTO giftmail_messages(id,owner_user_id,folder,from_address,to_json,cc_json,bcc_json,subject,body_html,body_text,message_id,read_flag,sent_at,created_at,raw_size) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'),?)`).bind(id,user.id,'sent',user.email,JSON.stringify(to),JSON.stringify(payload.cc||[]),JSON.stringify(payload.bcc||[]),payload.subject||'(sem assunto)',payload.html||'',stripHtml(payload.html||''),data.id||'',1,JSON.stringify(payload).length).run();
@@ -285,7 +286,7 @@ async function api(req,env){
       vacation:!!st?.vacation,vacationText:st?.vacation_text||'',vacationSubject:st?.vacation_subject||'Resposta automática',
       vacationStart:st?.vacation_start||'',vacationEnd:st?.vacation_end||'',
       forwardEnabled:!!st?.forward_enabled,forwardAddress:st?.forward_address||'',forwardKeepCopy:st?.forward_keep_copy!==0,
-      blocked:safeJson(st?.blocked_json),rules:safeJson(st?.rules_json),aliases:safeJson(st?.aliases_json),customFolders:safeJson(st?.custom_folders_json),
+      blocked:safeJson(st?.blocked_json),rules:safeJson(st?.rules_json),aliases:safeJson(st?.aliases_json),customFolders:(()=>{const x=safeJson(st?.custom_folders_json);return x.length?x:['Comercial','Compras','Engenharia','Financeiro','Projetos']})(),
       externalImages:!!st?.external_images,desktopNotifications:st?.desktop_notifications!==0,notifyImportant:st?.notify_important!==0,
       preview:st?.preview||'split',notifications:!!st?.notifications,sound:!!st?.sound
     })
@@ -322,7 +323,7 @@ async function inbound(message,env){
   const recipient=String(message.to||'').toLowerCase();
   const u=await env.DB.prepare(`SELECT id,email,display_name,role FROM giftmail_users WHERE lower(email)=? AND active=1`).bind(recipient).first();
   if(!u){message.setReject('Mailbox unavailable');return}
-  const rawBytes=new Uint8Array(await new Response(message.raw).arrayBuffer()),raw=bytesToBinaryString(rawBytes),parsed=parseMime(raw),h=parsed.headers,id=newId();
+  const rawBytes=new Uint8Array(await new Response(message.raw).arrayBuffer()),raw=bytesToBinaryString(rawBytes),parsed=parseMime(raw),h=parsed.headers,id=newId();logEvent('inbound_parsed',{to:recipient,size:rawBytes.byteLength,attachments:parsed.attachments.length});
   const from=decodeMimeWord(h.from||message.from||''),sender=extractAddress(from),subject=decodeMimeWord(h.subject||'(sem assunto)');
   const st=await env.DB.prepare(`SELECT * FROM giftmail_settings WHERE user_id=?`).bind(u.id).first();
   const blocked=safeJson(st?.blocked_json),rules=safeJson(st?.rules_json);
@@ -341,13 +342,13 @@ async function inbound(message,env){
   for(const a of parsed.attachments)await saveAttachment(env,id,a);
 
   const attachments=await attachmentsFor(env,id);
-  if(st?.forward_enabled&&st?.forward_address){
+  if(folder!=='spam'&&st?.forward_enabled&&st?.forward_address){
     try{await sendViaResend(env,u,{to:[st.forward_address],subject:'Enc: '+subject,html:parsed.html||('<pre>'+String(parsed.text||'')+'</pre>'),attachments},false)}
     catch(e){console.error('auto-forward failed',e.message)}
   }
   const today=new Date().toISOString().slice(0,10),vacationInRange=(!st?.vacation_start||today>=st.vacation_start)&&(!st?.vacation_end||today<=st.vacation_end);
   const autoSubmitted=String(h['auto-submitted']||'').toLowerCase();
-  if(st?.vacation&&st?.vacation_text&&sender&&sender!==String(u.email).toLowerCase()&&vacationInRange&&(!autoSubmitted||autoSubmitted==='no')){
+  if(folder!=='spam'&&st?.vacation&&st?.vacation_text&&sender&&sender!==String(u.email).toLowerCase()&&vacationInRange&&(!autoSubmitted||autoSubmitted==='no')){
     try{
       const safe=String(st.vacation_text).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])).replace(/\r?\n/g,'<br>');
       await sendViaResend(env,u,{to:[sender],subject:st.vacation_subject||'Resposta automática',html:safe},false)
