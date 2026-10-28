@@ -231,6 +231,7 @@ async function api(req,env){
     return json({ok:true,url:'https://giftmail.vercel.app/assets/gift-logo.png'});
   }
   if(p==='/api/auth/logout'&&req.method==='POST'){const raw=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE token_hash=?`).bind(await sha256(raw)).run();return json({ok:true})}
+  if(p==='/api/auth/logout-others'&&req.method==='POST'){const raw=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,''),current=await sha256(raw);await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE user_id=? AND token_hash<>?`).bind(user.id,current).run();return json({ok:true})}
   if(p==='/api/summary'&&req.method==='GET'){
     const {results=[]}=await env.DB.prepare(`SELECT folder,COUNT(*) c,SUM(CASE WHEN read_flag=0 THEN 1 ELSE 0 END) unread,SUM(CASE WHEN starred=1 THEN 1 ELSE 0 END) starred FROM giftmail_messages WHERE owner_user_id=? GROUP BY folder`).bind(user.id).all();const out={inbox:0,unread:0,starred:0,sent:0,drafts:0,scheduled:0,archive:0,spam:0,trash:0};for(const r of results){out[r.folder]=r.c;if(r.folder==='inbox')out.unread=r.unread||0;out.starred+=r.starred||0}return json(out)
   }
