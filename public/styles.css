@@ -633,3 +633,19 @@ body{font-weight:400!important}
 .empty-reader h2{font-weight:600!important}
 .section-title{font-weight:600!important}
 .storage-box{font-size:11.5px!important}
+
+
+/* ===== V19.3 — coluna da lista após remoção do zoom ===== */
+@media(min-width:821px){
+  .mail-grid{grid-template-columns:560px minmax(0,1fr)!important}
+  .message-card{
+    grid-template-columns:30px 46px minmax(0,1fr) 30px!important;
+    gap:11px!important;
+    padding:11px 14px 9px 18px!important;
+  }
+  .message-main{min-width:0!important;overflow:hidden!important}
+  .sender-line,.subject-line,.preview-line{min-width:0!important}
+  .sender-line strong,.subject-line b,.preview-line{
+    overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important
+  }
+}
