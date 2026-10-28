@@ -218,6 +218,19 @@ async function downloadAttachment(id,name='anexo'){
     setTimeout(()=>URL.revokeObjectURL(u),5000)
   }catch(e){toast(e.message,true)}
 }
+async function batchMessageAction(ids,action,value){
+  try{
+    await api('/api/messages/batch',{method:'POST',body:JSON.stringify({ids,action,value})});
+    return true;
+  }catch(e){
+    if(e?.status!==404)throw e;
+    for(const id of ids){
+      const m=state.messages.find(x=>x.id===id)||(state.current?.id===id?state.current:null);
+      await api('/api/messages/'+id,{method:'PATCH',body:JSON.stringify({action,value,folder:m?.folder||state.folder})});
+    }
+    return false;
+  }
+}
 async function toggleStar(m){
   const before=!!m.starred;m.starred=!before;renderMessages();if(state.current?.id===m.id)renderReader(m);
   try{await api('/api/messages/'+m.id,{method:'PATCH',body:JSON.stringify({action:'star',value:m.starred,folder:m.folder})});await loadSummary()}
@@ -228,7 +241,7 @@ async function moveSelected(folder){
   const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);
   if(!ids.length)return toast('Selecione ao menos uma mensagem',true);
   try{
-    await api('/api/messages/batch',{method:'POST',body:JSON.stringify({ids,action:'move',value:folder})});
+    await batchMessageAction(ids,'move',folder);
     toast('Mensagem(ns) movida(s)');state.current=null;state.selected.clear();
     $('#readerPane').innerHTML='<div class="empty-reader"><div class="mail-illustration">✉</div><h2>Selecione uma mensagem</h2><p>O conteúdo do e-mail aparecerá aqui.</p></div>';
     await Promise.all([loadMessages(),loadSummary()]);
@@ -238,7 +251,7 @@ async function markSelected(read=true){
   const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);
   if(!ids.length)return toast('Selecione ao menos uma mensagem',true);
   try{
-    await api('/api/messages/batch',{method:'POST',body:JSON.stringify({ids,action:'read',value:read})});
+    await batchMessageAction(ids,'read',read);
     for(const id of ids){const m=state.messages.find(x=>x.id===id)||(state.current?.id===id?state.current:null);if(m)m.read=read}
     renderMessages();if(state.current)renderReader(state.current);await loadSummary();
   }catch(e){toast(e.message,true)}
