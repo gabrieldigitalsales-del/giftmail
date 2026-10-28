@@ -600,3 +600,36 @@ body{font-feature-settings:"kern" 1,"liga" 1;text-rendering:optimizeLegibility}
 .login-card input{height:48px!important;font-size:14px!important}
 .login-card .check-line{font-size:13px!important}
 .login-card .primary.full{height:48px!important;font-size:15px!important}
+
+
+/* ===== V19.2 — escala desktop e pesos tipográficos ===== */
+@media(min-width:821px){
+  html{overflow:hidden!important;background:var(--panel,#fff)!important}
+  body{
+    zoom:1!important;width:100vw!important;height:100vh!important;
+    min-width:100vw!important;min-height:100vh!important;overflow:hidden!important
+  }
+  .app,.login-shell{width:100%!important;height:100vh!important;min-height:100vh!important}
+}
+body{font-weight:400!important}
+.nav-item b,.custom-folder b{font-size:14px!important;font-weight:500!important}
+.compose-btn{font-weight:600!important}
+.action-group button,.select-control{font-size:13.5px!important;font-weight:400!important}
+.tab{font-size:13.5px!important;font-weight:500!important}
+.tab.active{font-weight:600!important}
+.sender-line{font-size:13.5px!important;font-weight:400!important}
+.sender-line strong{font-weight:500!important}
+.message-card.unread .sender-line strong{font-weight:600!important}
+.subject-line{font-size:13.5px!important}
+.subject-line b{font-weight:500!important}
+.message-card.unread .subject-line b{font-weight:600!important}
+.preview-line{font-size:12.5px!important;font-weight:400!important}
+.sender-line time{font-size:11.5px!important}
+.profile-copy strong{font-size:14px!important;font-weight:600!important}
+.profile-copy small{font-size:11.5px!important}
+.reader-title h1{font-size:25px!important;font-weight:600!important}
+.reader-meta strong{font-weight:600!important}
+.reader-body{font-size:15.5px!important;line-height:1.7!important;font-weight:400!important}
+.empty-reader h2{font-weight:600!important}
+.section-title{font-weight:600!important}
+.storage-box{font-size:11.5px!important}
