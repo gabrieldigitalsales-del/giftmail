@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GIFT Mail</title>
   <link rel="icon" href="assets/gift-logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -80,6 +83,7 @@
       <div class="actionbar">
         <div class="action-group left-actions">
           <label class="select-control"><input type="checkbox" id="selectAll"> <span>Selecionar</span></label>
+          <button id="refreshBtn" title="Atualizar caixa"><span class="mail-icon" data-mail-icon="refresh"></span><span>Atualizar</span></button>
           <button id="deleteBtn"><span class="mail-icon" data-mail-icon="trash"></span><span>Excluir</span></button><button id="emptyTrashActionBtn" class="hidden danger-action"><span class="mail-icon" data-mail-icon="trashSweep"></span><span>Esvaziar lixeira</span></button>
           <button id="spamBtn"><span class="mail-icon" data-mail-icon="spam"></span><span>Spam</span></button>
           <button id="archiveBtn"><span class="mail-icon" data-mail-icon="archive"></span><span>Arquivar</span></button>
@@ -112,6 +116,7 @@
           <span id="folderLabel">Caixa de Entrada</span>
         </div>
         <div class="mail-grid">
+          <div id="listRefreshStatus" class="list-refresh-status hidden" role="status" aria-live="polite"><span class="list-refresh-spinner"></span><strong>Atualizando...</strong></div>
           <div class="message-list" id="messageList"></div>
           <article class="reader" id="readerPane">
             <div class="empty-reader"><div class="mail-illustration">✉</div><h2>Selecione uma mensagem</h2><p>O conteúdo do e-mail aparecerá aqui.</p></div>
@@ -144,7 +149,7 @@
       <input id="subjectField" aria-label="Assunto" placeholder="Assunto" autocomplete="off">
     </div>
     <div class="editor-toolbar compose-format-toolbar" aria-label="Formatação da mensagem">
-      <select id="fontFamily" aria-label="Fonte"><option>Inter</option><option>Arial</option><option>Georgia</option><option>Verdana</option></select>
+      <select id="fontFamily" aria-label="Fonte"><option>Manrope</option><option>Arial</option><option>Georgia</option><option>Verdana</option></select>
       <select id="fontSize" aria-label="Tamanho"><option value="14">14</option><option value="12">12</option><option value="16">16</option><option value="18">18</option></select>
       <button type="button" data-cmd="bold" title="Negrito"><b>B</b></button>
       <button type="button" data-cmd="italic" title="Itálico"><i>I</i></button>
@@ -194,6 +199,20 @@
       <div class="compose-dialog-actions">
         <button id="actionDialogCancel" type="button" class="compose-dialog-cancel">Cancelar</button>
         <button id="actionDialogConfirm" type="button" class="compose-dialog-primary">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="inputDialog" class="compose-dialog-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="inputDialogTitle">
+    <div class="compose-dialog-card input-dialog-card">
+      <div class="compose-dialog-icon"><span class="mail-icon" data-mail-icon="edit"></span></div>
+      <h3 id="inputDialogTitle">Informação</h3>
+      <p id="inputDialogText"></p>
+      <input id="inputDialogField" class="input-dialog-field" autocomplete="off">
+      <div class="compose-dialog-actions">
+        <button id="inputDialogCancel" type="button" class="compose-dialog-cancel">Cancelar</button>
+        <button id="inputDialogConfirm" type="button" class="compose-dialog-primary">Confirmar</button>
       </div>
     </div>
   </div>
