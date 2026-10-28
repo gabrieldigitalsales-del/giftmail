@@ -649,3 +649,14 @@ body{font-weight:400!important}
     overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important
   }
 }
+
+
+/* ===== V19.4 — aviso único de imagens externas ===== */
+.external-images-notice{
+  display:inline-flex;align-items:center;min-height:32px;
+  margin:0 0 16px;padding:0 10px;
+  border:1px solid #e2e6e9;border-radius:7px;
+  background:#f7f8f9;color:#66717a;
+  font-size:12px;font-weight:500
+}
+.dark .external-images-notice{background:#182229;border-color:#33414a;color:#c7d0d6}
