@@ -62,6 +62,15 @@
         <div class="top-right">
           <button class="top-icon mobile-search-btn" id="mobileSearchBtn" title="Pesquisar" aria-label="Pesquisar"><span class="mail-icon" data-mail-icon="search"></span></button>
           <button class="top-icon mobile-refresh-btn" id="mobileRefreshBtn" title="Atualizar" aria-label="Atualizar"><span class="mail-icon" data-mail-icon="refresh"></span></button>
+          <div class="notification-wrap">
+            <button class="top-icon notification-btn" id="notificationBtn" title="Notificações" aria-label="Notificações">
+              <span class="mail-icon" data-mail-icon="bell"></span><span id="notificationBadge" class="notification-badge hidden">0</span>
+            </button>
+            <div id="notificationPanel" class="notification-panel hidden">
+              <div class="notification-head"><div><strong>Notificações</strong><small>Novas mensagens e alertas da conta</small></div><button id="markNotificationsRead">Marcar como lidas</button></div>
+              <div id="notificationList" class="notification-list"><div class="notification-empty">Nenhuma notificação nova.</div></div>
+            </div>
+          </div>
           <button class="top-icon" id="themeBtn" title="Tema"><span class="mail-icon" data-mail-icon="sun"></span></button>
           <button class="top-icon" id="settingsBtn" title="Configurações"><span class="mail-icon" data-mail-icon="settings"></span></button>
           <div class="profile-wrap">
@@ -105,6 +114,8 @@
         <input id="searchTo" name="gift-search-to" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Para">
         <input id="searchSubject" name="gift-search-subject" autocomplete="off" spellcheck="false" placeholder="Assunto contém">
         <select id="searchHasAttachment"><option value="">Anexo: qualquer</option><option value="yes">Com anexo</option><option value="no">Sem anexo</option></select>
+        <input id="searchStartDate" type="date" title="Data inicial">
+        <input id="searchEndDate" type="date" title="Data final">
         <button id="applyAdvancedSearch" class="primary">Pesquisar</button>
         <button id="clearAdvancedSearch">Limpar</button>
       </section>
@@ -232,6 +243,8 @@
           <button data-tab="vacation">Resposta automática</button>
           <button data-tab="blocked">Remetentes bloqueados</button>
           <button data-tab="security">Segurança</button>
+          <button data-tab="sessions">Sessões</button>
+          <button id="adminSettingsTab" class="hidden" data-tab="admin">Administração</button>
           <button data-tab="notifications">Notificações</button>
           <button data-tab="appearance">Aparência</button>
           <button data-tab="storage">Armazenamento</button>
@@ -309,12 +322,33 @@
           <section class="settings-panel" data-panel="security">
             <h3>Segurança</h3>
             <p class="hint">Sessões podem ser encerradas pelo GIFT Mail. 2FA e alertas de novos logins exigem uma segunda etapa de autenticação e ainda não estão ativados.</p>
-            <label class="check-line"><input id="twoFactor" type="checkbox" disabled> Autenticação em duas etapas</label>
+            
             <label class="check-line"><input id="suspiciousLogin" type="checkbox" checked disabled> Alertar sobre novos logins</label>
             <label class="check-line"><input id="externalImages" type="checkbox"> Carregar imagens externas automaticamente</label>
             <h4>Sessões ativas</h4>
             <div class="session-card"><div><strong>Este dispositivo</strong><small>Windows · Navegador atual</small></div><span class="online">Ativa agora</span></div>
             <button id="logoutOtherSessions">Encerrar outras sessões</button>
+          </section>
+          <section class="settings-panel" data-panel="sessions">
+            <h3>Sessões ativas</h3>
+            <p class="hint">Veja os dispositivos com sessão válida nesta conta. Você pode encerrar todas as outras sessões de uma vez.</p>
+            <div id="sessionsList" class="sessions-list"></div>
+            <button id="sessionsLogoutOthers" type="button">Encerrar outras sessões</button>
+          </section>
+          <section class="settings-panel" data-panel="admin">
+            <h3>Administração</h3>
+            <p class="hint">Gerencie contas corporativas, senhas temporárias e consulte eventos recentes do sistema.</p>
+            <div class="admin-create">
+              <input id="adminNewName" placeholder="Nome / setor">
+              <input id="adminNewEmail" type="email" placeholder="usuario@giftexcellence.com.br">
+              <input id="adminNewPassword" type="password" placeholder="Senha temporária">
+              <select id="adminNewRole"><option value="user">Usuário</option><option value="admin">Administrador</option></select>
+              <button id="adminCreateUser" class="primary" type="button">Criar conta</button>
+            </div>
+            <div class="settings-subhead"><strong>Contas</strong><button id="adminRefreshUsers" type="button">Atualizar</button></div>
+            <div id="adminUsersList" class="admin-users-list"></div>
+            <div class="settings-subhead"><strong>Auditoria recente</strong></div>
+            <div id="adminAuditList" class="admin-audit-list"></div>
           </section>
           <section class="settings-panel" data-panel="notifications">
             <h3>Notificações</h3>
