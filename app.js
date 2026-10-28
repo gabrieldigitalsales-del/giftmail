@@ -584,7 +584,7 @@ $$('#folderNav .nav-item').forEach(b=>b.onclick=async()=>{$$('#folderNav .nav-it
 $$('.tab').forEach(b=>b.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.filter=b.dataset.filter;renderMessages()});
 $('#composeBtn').onclick=()=>{closeMobileSidebar();requestOpenCompose('new')};$('#replyBtn').onclick=()=>state.current?requestOpenCompose('reply',state.current):toast('Selecione uma mensagem');$('#replyAllBtn').onclick=()=>state.current?requestOpenCompose('replyAll',state.current):toast('Selecione uma mensagem');$('#forwardBtn').onclick=()=>state.current?requestOpenCompose('forward',state.current):toast('Selecione uma mensagem');
 $('#searchInput').oninput=()=>{clearTimeout(window.__st);window.__st=setTimeout(loadMessages,250)};$('#advancedSearchBtn').onclick=()=>$('#advancedSearch').classList.toggle('hidden');$('#applyAdvancedSearch').onclick=renderMessages;$('#clearAdvancedSearch').onclick=()=>{$('#searchFrom').value=$('#searchTo').value=$('#searchSubject').value='';$('#searchHasAttachment').value='';renderMessages()};
-$('#refreshBtn').onclick=refreshMailbox;
+$('#refreshBtn').onclick=refreshMailbox;$('#mobileRefreshBtn').onclick=refreshMailbox;
 $('#selectAll').onchange=e=>{for(const m of filteredMessages())e.target.checked?state.selected.add(m.id):state.selected.delete(m.id);renderMessages();updateMobileSelectionBar()};$('#deleteBtn').onclick=requestDeleteSelected;$('#emptyTrashActionBtn').onclick=requestEmptyTrash;$('#spamBtn').onclick=()=>moveSelected('spam');$('#archiveBtn').onclick=()=>moveSelected('archive');
 async function setStarSelected(value=true){
   const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);
