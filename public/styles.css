@@ -274,7 +274,7 @@ body.dark{--ink:#f4f7f9;--muted:#aab3bc;--line:#2c363e;background:#0e151a}.dark 
 .dark .compose-subject-line input::placeholder{color:#7f8d96!important}
 
 /* ===== V18 — base final desktop/mobile limpa ===== */
-html,body,button,input,select,textarea{font-family:Arial,Helvetica,sans-serif!important}
+html,body,button,input,select,textarea{font-family:var(--font-ui)!important}
 .mobile-title,.mobile-search-btn,.mobile-compose-fab,.mobile-nav-overlay{display:none}
 .mobile-reader-back{display:none!important}
 
@@ -554,3 +554,35 @@ html,body,button,input,select,textarea{font-family:Arial,Helvetica,sans-serif!im
 .attachment-chip.attachment-open .attachment-download *{
   cursor:pointer!important;
 }
+
+
+/* ===== V19 — tipografia, refresh interno e diálogos ===== */
+:root{--font-ui:"Manrope","Avenir Next","Segoe UI",Arial,sans-serif}
+html,body,button,input,select,textarea{font-family:var(--font-ui)!important}
+body{font-feature-settings:"kern" 1,"liga" 1;text-rendering:optimizeLegibility}
+.body-editor,.reader-body,.message-card,.settings-dialog,.compose-window{font-family:var(--font-ui)!important}
+.mail-grid{position:relative!important}
+.list-refresh-status{
+  position:absolute;top:14px;left:50%;transform:translateX(-50%);
+  z-index:2100;display:flex;align-items:center;gap:9px;
+  min-height:38px;padding:0 14px;border:1px solid #e1e6e9;border-radius:10px;
+  background:rgba(255,255,255,.96);box-shadow:0 10px 28px rgba(0,0,0,.14);
+  color:#354049;font-size:12px;font-weight:700;pointer-events:none;
+  backdrop-filter:blur(7px)
+}
+.list-refresh-status.success{color:#178348;border-color:#cfe9d9}
+.list-refresh-spinner{width:15px;height:15px;border:2px solid #d5dce0;border-top-color:var(--red);border-radius:50%;animation:giftRefreshSpin .7s linear infinite}
+.list-refresh-status.success .list-refresh-spinner{animation:none;border-color:#25a35a;background:#25a35a;box-shadow:inset 0 0 0 3px #fff}
+@keyframes giftRefreshSpin{to{transform:rotate(360deg)}}
+.dark .list-refresh-status{background:rgba(18,28,34,.96);border-color:#34434d;color:#e8eef2}
+.dark .list-refresh-status.success{color:#8ee3ae;border-color:#305941}
+.input-dialog-card{text-align:left!important}
+.input-dialog-card .compose-dialog-icon{margin-left:0!important}
+.input-dialog-card h3,.input-dialog-card p{text-align:left!important;margin-left:0!important}
+.input-dialog-field{
+  width:100%;height:42px;margin:0 0 18px;padding:0 12px;
+  border:1px solid #dfe4e8;border-radius:8px;outline:none;
+  background:#fff;color:#12171b;font-family:var(--font-ui)!important
+}
+.input-dialog-field:focus{border-color:#9ca8af;box-shadow:0 0 0 3px rgba(111,120,129,.1)}
+.dark .input-dialog-field{background:#172229;border-color:#34434d;color:#eef3f6}
