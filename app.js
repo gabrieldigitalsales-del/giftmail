@@ -164,7 +164,7 @@ async function showApp(){
     if(state.settings.phone==='(31) 3773-1234')state.settings.phone='(31) 3772-6397';
     if(state.settings.signaturePhone==='(31) 3773-1234')state.settings.signaturePhone='(31) 3772-6397';
     state.user={email:state.settings.email||accountEmail||'admin@giftexcellence.com.br',name:state.settings.displayName||'Administrador',role:srv.role||state.user?.role||'user'};
-    if(s.desktopNotifications&&'Notification'in window&&Notification.permission==='default'){try{await Notification.requestPermission()}catch{}}
+    if(state.settings.desktopNotifications&&'Notification'in window&&Notification.permission==='default'){try{await Notification.requestPermission()}catch{}}
     saveLocalSettings();
     applySettings();await refreshAll();startNotificationPolling();
   }catch(e){
