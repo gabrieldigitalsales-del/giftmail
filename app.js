@@ -58,7 +58,13 @@ async function api(url,opt={}){
     }
   }
 }
-function initials(s=''){const clean=s.replace(/<.*?>/g,'').trim();const words=clean.split(/\s+/).filter(Boolean);return (words[0]?.[0]||'G')+(words[1]?.[0]||'');}
+function initials(s=''){
+  const clean=repairTextEncoding(String(s||'').replace(/<[^>]*>/g,' ').replace(/[^\p{L}\s]/gu,' ').replace(/\s+/g,' ').trim());
+  const words=clean.split(' ').filter(Boolean);
+  const first=words[0]?.match(/\p{L}/u)?.[0]||'G';
+  const second=words.slice(1).map(w=>w.match(/\p{L}/u)?.[0]).find(Boolean)||'';
+  return (first+second).toLocaleUpperCase('pt-BR');
+}
 function nameFromAddress(s=''){const m=s.match(/^([^<]+)</);if(m)return m[1].trim();const x=s.replace(/[<>]/g,'').split('@')[0]||s;return x.split(/[._-]/).map(a=>a.charAt(0).toUpperCase()+a.slice(1)).join(' ')}
 function formatDate(s){const d=new Date(s),now=new Date();if(d.toDateString()===now.toDateString())return d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});const y=new Date(now);y.setDate(y.getDate()-1);if(d.toDateString()===y.toDateString())return 'Ontem';return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}
 function repairTextEncoding(value=''){
@@ -222,9 +228,11 @@ function sanitizeEmailHtml(html=''){
         if(n==='style'&&/(position\s*:\s*(absolute|fixed|sticky)|z-index\s*:|(?:^|;)\s*(top|left|right|bottom|inset)\s*:|expression\s*\(|javascript\s*:)/i.test(v))el.removeAttribute('style');
       });
       if(el.tagName==='A'){el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer')}
-      if(el.tagName==='IMG'){const src=String(el.getAttribute('src')||'');if(!state.settings.externalImages&&/^https?:/i.test(src)){el.replaceWith(doc.createTextNode('[imagem externa bloqueada]'))}else{el.style.maxWidth='100%';el.style.height='auto';el.setAttribute('loading','lazy')}}
+      if(el.tagName==='IMG'){const src=String(el.getAttribute('src')||'');if(!state.settings.externalImages&&/^https?:/i.test(src)){doc.body.dataset.externalImagesBlocked='1';el.remove()}else{el.style.maxWidth='100%';el.style.height='auto';el.setAttribute('loading','lazy')}}
     });
-    return doc.body.innerHTML;
+    const blocked=doc.body.dataset.externalImagesBlocked==='1';
+    delete doc.body.dataset.externalImagesBlocked;
+    return (blocked?'<div class="external-images-notice">Imagens externas bloqueadas por segurança.</div>':'')+doc.body.innerHTML;
   }catch{return escapeHtml(String(html))}
 }
 function normalizeBody(body=''){
