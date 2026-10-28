@@ -228,7 +228,7 @@ async function moveSelected(folder){
   const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);
   if(!ids.length)return toast('Selecione ao menos uma mensagem',true);
   try{
-    for(const id of ids){const m=state.messages.find(x=>x.id===id)||state.current;await api('/api/messages/'+id,{method:'PATCH',body:JSON.stringify({action:'move',value:folder,folder:m?.folder||state.folder})})}
+    await api('/api/messages/batch',{method:'POST',body:JSON.stringify({ids,action:'move',value:folder})});
     toast('Mensagem(ns) movida(s)');state.current=null;state.selected.clear();
     $('#readerPane').innerHTML='<div class="empty-reader"><div class="mail-illustration">✉</div><h2>Selecione uma mensagem</h2><p>O conteúdo do e-mail aparecerá aqui.</p></div>';
     await Promise.all([loadMessages(),loadSummary()]);
@@ -238,11 +238,8 @@ async function markSelected(read=true){
   const ids=state.selected.size?[...state.selected]:(state.current?[state.current.id]:[]);
   if(!ids.length)return toast('Selecione ao menos uma mensagem',true);
   try{
-    for(const id of ids){
-      const m=state.messages.find(x=>x.id===id)||(state.current?.id===id?state.current:null);
-      await api('/api/messages/'+id,{method:'PATCH',body:JSON.stringify({action:'read',value:read,folder:m?.folder||state.folder})});
-      if(m)m.read=read;
-    }
+    await api('/api/messages/batch',{method:'POST',body:JSON.stringify({ids,action:'read',value:read})});
+    for(const id of ids){const m=state.messages.find(x=>x.id===id)||(state.current?.id===id?state.current:null);if(m)m.read=read}
     renderMessages();if(state.current)renderReader(state.current);await loadSummary();
   }catch(e){toast(e.message,true)}
 }
@@ -515,7 +512,11 @@ async function saveSettings(){
       displayName:s.displayName,signatureName:s.signatureName,signatureCompany:s.signatureCompany,
       signaturePhone:s.signaturePhone,signatureCity:s.signatureCity,signatureSite:s.signatureSite,
       signatureNew:s.signatureNew,signatureReplies:s.signatureReplies,theme:s.theme,density:s.density,
-      vacation:s.vacation,vacationText:s.vacationText,notifications:s.desktopNotifications,sound:s.soundNotifications
+      vacation:s.vacation,vacationText:s.vacationText,vacationSubject:s.vacationSubject,vacationStart:s.vacationStart,vacationEnd:s.vacationEnd,
+      forwardEnabled:s.forwardEnabled,forwardAddress:s.forwardAddress,forwardKeepCopy:s.forwardKeepCopy,
+      blocked:s.blocked,rules:s.rules,aliases:s.aliases,customFolders:s.customFolders,
+      externalImages:s.externalImages,desktopNotifications:s.desktopNotifications,notifyImportant:s.notifyImportant,preview:s.preview,
+      notifications:s.desktopNotifications,sound:s.soundNotifications
     })});
     saveLocalSettings();
     applySettings();
@@ -529,7 +530,7 @@ async function saveSettings(){
     if(saveBtn){saveBtn.disabled=false;saveBtn.textContent=oldText||'Salvar alterações'}
   }
 }
-function renderCustomFolders(){const el=$('#customFolders');el.innerHTML=(state.settings.customFolders||defaults.customFolders).map((n,i)=>`<div class="custom-folder"><span class="mail-icon">${mailIcon('file',16)}</span><b>${escapeHtml(n)}</b><button data-i="${i}" title="Remover">×</button></div>`).join('');$$('.custom-folder button').forEach(b=>b.onclick=e=>{e.stopPropagation();state.settings.customFolders.splice(+b.dataset.i,1);saveLocalSettings();renderCustomFolders()});$$('.custom-folder').forEach((r,i)=>r.onclick=()=>toast('Pasta "'+state.settings.customFolders[i]+'" pronta para receber regras e etiquetas.'))}
+function renderCustomFolders(){const el=$('#customFolders'),folders=state.settings.customFolders||defaults.customFolders;el.innerHTML=folders.map((n,i)=>`<div class="custom-folder ${state.folder===n?'active':''}" data-folder="${escapeHtml(n)}"><span class="mail-icon">${mailIcon('file',16)}</span><b>${escapeHtml(n)}</b><button data-i="${i}" title="Remover">×</button></div>`).join('');$('.custom-folder button').forEach(b=>b.onclick=async e=>{e.stopPropagation();state.settings.customFolders.splice(+b.dataset.i,1);saveLocalSettings();renderCustomFolders();try{await api('/api/settings',{method:'POST',body:JSON.stringify({customFolders:state.settings.customFolders})})}catch{}});$('.custom-folder').forEach(r=>r.onclick=async()=>{$('#folderNav .nav-item').forEach(x=>x.classList.remove('active'));state.folder=r.dataset.folder;state.current=null;closeMobileSidebar();renderCustomFolders();await loadMessages()})}
 let inputDialogResolve=null;
 function closeInputDialog(value=null){
   const modal=$('#inputDialog');if(modal)modal.classList.add('hidden');
@@ -546,7 +547,7 @@ function openInputDialog({title='Informação',text='',value='',placeholder='',c
 }
 function showMenu(anchorOrX,yOrItems,maybeItems){const m=$('#contextMenu');const isAnchor=anchorOrX&&anchorOrX.getBoundingClientRect;const items=isAnchor?yOrItems:maybeItems;m.innerHTML=items.map((it,i)=>`<button data-i="${i}">${it.label}</button>`).join('');m.classList.remove('hidden');m.style.visibility='hidden';let x,y;if(isAnchor){const r=anchorOrX.getBoundingClientRect();x=r.left;y=r.bottom+6;}else{x=Number(anchorOrX)||12;y=Number(yOrItems)||12;}requestAnimationFrame(()=>{const w=m.offsetWidth||210,h=m.offsetHeight||200;m.style.left=Math.max(8,Math.min(x,innerWidth-w-8))+'px';m.style.top=Math.max(8,Math.min(y,innerHeight-h-8))+'px';m.style.visibility='visible'});$$('#contextMenu button').forEach(b=>b.onclick=async ev=>{ev.stopPropagation();m.classList.add('hidden');await items[+b.dataset.i].fn()})}
 function showMessageContext(e,m){e.preventDefault();showMenu(e.clientX,e.clientY,[{label:'Responder',fn:()=>openCompose('reply',m)},{label:'Encaminhar',fn:()=>openCompose('forward',m)},{label:m.read?'Marcar como não lida':'Marcar como lida',fn:async()=>{state.selected=new Set([m.id]);await markSelected(!m.read)}},{label:'Arquivar',fn:async()=>{state.selected=new Set([m.id]);await moveSelected('archive')}},{label:'Mover para Spam',fn:async()=>{state.selected=new Set([m.id]);await moveSelected('spam')}},{label:state.folder==='trash'?'Excluir definitivamente':'Excluir',fn:()=>{state.selected=new Set([m.id]);requestDeleteSelected()}}])}
-function showReaderContext(e,m){const r=e.currentTarget.getBoundingClientRect();showMenu(r.left,r.bottom,[{label:'Imprimir',fn:()=>window.print()},{label:'Marcar como não lida',fn:async()=>{state.selected=new Set([m.id]);await markSelected(false)}},{label:'Bloquear remetente',fn:()=>{const em=extractEmail(m.from||'');if(!state.settings.blocked.includes(em))state.settings.blocked.push(em);saveLocalSettings();toast('Remetente bloqueado')}},{label:state.folder==='trash'?'Excluir definitivamente':'Excluir',fn:()=>{state.selected=new Set([m.id]);requestDeleteSelected()}}])}
+function showReaderContext(e,m){const r=e.currentTarget.getBoundingClientRect();showMenu(r.left,r.bottom,[{label:'Imprimir',fn:()=>window.print()},{label:'Marcar como não lida',fn:async()=>{state.selected=new Set([m.id]);await markSelected(false)}},{label:'Bloquear remetente',fn:async()=>{const em=extractEmail(m.from||'');if(!state.settings.blocked.includes(em))state.settings.blocked.push(em);saveLocalSettings();try{await api('/api/settings',{method:'POST',body:JSON.stringify({blocked:state.settings.blocked})});toast('Remetente bloqueado')}catch(e){toast(e.message,true)}}},{label:state.folder==='trash'?'Excluir definitivamente':'Excluir',fn:()=>{state.selected=new Set([m.id]);requestDeleteSelected()}}])}
 
 $('#loginForm').onsubmit=async e=>{
   e.preventDefault();
@@ -580,7 +581,7 @@ async function setStarSelected(value=true){
     if(m&&m.starred!==value)await toggleStar(m);
   }
 }
-$('#moveBtn').onclick=e=>{e.stopPropagation();showMenu(e.currentTarget,['inbox','archive','spam','trash'].map(f=>({label:'Mover para '+folderNames[f],fn:()=>f==='trash'?requestDeleteSelected():moveSelected(f)})))};
+$('#moveBtn').onclick=e=>{e.stopPropagation();showMenu(e.currentTarget,[...['inbox','archive','spam','trash'],...(state.settings.customFolders||[])].map(f=>({label:'Mover para '+(folderNames[f]||f),fn:()=>f==='trash'?requestDeleteSelected():moveSelected(f)})))};
 $('#markBtn').onclick=e=>{e.stopPropagation();showMenu(e.currentTarget,[
   {label:'Marcar como lida',fn:()=>markSelected(true)},
   {label:'Marcar como não lida',fn:()=>markSelected(false)},
@@ -597,7 +598,7 @@ $('#moreBtn').onclick=e=>{e.stopPropagation();showMenu(e.currentTarget,[
 $('#readerMoreBtn').onclick=e=>{e.stopPropagation();if(state.current)showReaderContext(e,state.current)};$('#themeBtn').onclick=()=>{state.settings.theme=document.body.classList.contains('dark')?'light':'dark';saveLocalSettings();applySettings()};$('#mobileSearchBtn').onclick=e=>{e.stopPropagation();document.body.classList.toggle('mobile-search-open');if(document.body.classList.contains('mobile-search-open'))setTimeout(()=>$('#searchInput')?.focus(),40)};$('#profileTheme').onclick=()=>{$('#themeBtn').click();$('#profileMenu').classList.add('hidden')};$('#mobileComposeFab').onclick=()=>requestOpenCompose('new');
 $('#profileBtn').onclick=e=>{e.stopPropagation();$('#profileMenu').classList.toggle('hidden')};document.addEventListener('click',e=>{$('#profileMenu').classList.add('hidden');$('#contextMenu').classList.add('hidden');if(innerWidth<820&&$('#sidebar').classList.contains('open')&&!$('#sidebar').contains(e.target)&&!$('#mobileMenu').contains(e.target))closeMobileSidebar()});$('#settingsBtn').onclick=()=>openSettings();$('#profileSettings').onclick=()=>openSettings('account');$('#profilePassword').onclick=()=>openSettings('password');
 async function logout(){try{await api('/api/auth/logout',{method:'POST'})}catch{}state.token='';state.user=null;state.settings={};state.attachments=[];localStorage.removeItem('giftToken');sessionStorage.removeItem('giftToken');showLogin()}$('#profileLogout').onclick=requestLogout;
-$('#newFolderBtn').onclick=async()=>{const n=(await openInputDialog({title:'Nova pasta',text:'Digite o nome da pasta.',placeholder:'Nome da pasta',confirm:'Criar'}))?.trim();if(n){state.settings.customFolders=state.settings.customFolders||[];if(!state.settings.customFolders.includes(n))state.settings.customFolders.push(n);saveLocalSettings();renderCustomFolders()}};
+$('#newFolderBtn').onclick=async()=>{const n=(await openInputDialog({title:'Nova pasta',text:'Digite o nome da pasta.',placeholder:'Nome da pasta',confirm:'Criar'}))?.trim();if(n){state.settings.customFolders=state.settings.customFolders||[];if(!state.settings.customFolders.includes(n))state.settings.customFolders.push(n);saveLocalSettings();renderCustomFolders();try{await api('/api/settings',{method:'POST',body:JSON.stringify({customFolders:state.settings.customFolders})})}catch(e){toast('Pasta criada localmente, mas não sincronizada',true)}}};
 function closeMobileSidebar(){const sb=$('#sidebar'),ov=$('#mobileNavOverlay');sb?.classList.remove('open');ov?.classList.add('hidden');document.body.classList.remove('mobile-nav-open')}
 function setMobileSidebar(open){const sb=$('#sidebar'),ov=$('#mobileNavOverlay');if(!sb)return;if(innerWidth>=820){closeMobileSidebar();return}sb.classList.toggle('open',!!open);ov?.classList.toggle('hidden',!open);document.body.classList.toggle('mobile-nav-open',!!open)}
 $('#mobileMenu').onclick=e=>{e.stopPropagation();setMobileSidebar(!$('#sidebar').classList.contains('open'))};
