@@ -61,7 +61,40 @@ async function api(url,opt={}){
 function initials(s=''){const clean=s.replace(/<.*?>/g,'').trim();const words=clean.split(/\s+/).filter(Boolean);return (words[0]?.[0]||'G')+(words[1]?.[0]||'');}
 function nameFromAddress(s=''){const m=s.match(/^([^<]+)</);if(m)return m[1].trim();const x=s.replace(/[<>]/g,'').split('@')[0]||s;return x.split(/[._-]/).map(a=>a.charAt(0).toUpperCase()+a.slice(1)).join(' ')}
 function formatDate(s){const d=new Date(s),now=new Date();if(d.toDateString()===now.toDateString())return d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});const y=new Date(now);y.setDate(y.getDate()-1);if(d.toDateString()===y.toDateString())return 'Ontem';return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}
-function stripHtml(h=''){const d=document.createElement('div');d.innerHTML=h;return d.textContent||d.innerText||''}
+function repairTextEncoding(value=''){
+  const original=String(value??'');
+  if(!/[ÃÂâ]/.test(original))return original;
+  try{
+    const bytes=Uint8Array.from([...original].map(c=>c.charCodeAt(0)&255));
+    const fixed=new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+    const before=(original.match(/[ÃÂâ][^\s]?/g)||[]).length;
+    const after=(fixed.match(/[ÃÂâ][^\s]?/g)||[]).length;
+    return after<before?fixed:original;
+  }catch{return original}
+}
+function cleanMailMarkup(value=''){
+  return repairTextEncoding(String(value??''))
+    .replace(/<!--\s*\[if[\s\S]*?<!\s*\[endif\]\s*-->/gi,' ')
+    .replace(/<!--([\s\S]*?)-->/g,' ')
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi,'$1')
+    .replace(/<\?xml[\s\S]*?\?>/gi,' ')
+    .replace(/@font-face\s*\{[\s\S]*?\}/gi,' ')
+    .replace(/\/\*[\s\S]*?\*\//g,' ');
+}
+function stripHtml(h=''){
+  const d=document.createElement('div');
+  d.innerHTML=cleanMailMarkup(h);
+  d.querySelectorAll('style,script,head,meta,link,title').forEach(x=>x.remove());
+  return repairTextEncoding((d.textContent||d.innerText||'').replace(/\s+/g,' ').trim());
+}
+function previewText(body=''){
+  let t=stripHtml(body);
+  t=t.replace(/(?:font-family|font-size|mso-[\w-]+|margin(?:-[\w-]+)?|padding(?:-[\w-]+)?|color|background)\s*:[^;}{]+;?/gi,' ')
+     .replace(/[{}]/g,' ')
+     .replace(/\s+/g,' ')
+     .trim();
+  return t;
+}
 function splitEmails(v=''){return v.split(/[;,]/).map(x=>x.trim()).filter(Boolean)}
 function settingsStorageKey(email=state.settings?.email||state.user?.email||'default'){return 'giftUiSettings:'+String(email).trim().toLowerCase()}
 function saveLocalSettings(){localStorage.setItem(settingsStorageKey(),JSON.stringify({...defaults,...state.settings}))}
@@ -162,10 +195,10 @@ async function loadMessages(){
 }
 function filteredMessages(){let m=[...state.messages];if(state.filter==='unread')m=m.filter(x=>!x.read);if(state.filter==='starred')m=m.filter(x=>x.starred);const f=$('#searchFrom').value.trim().toLowerCase(),t=$('#searchTo').value.trim().toLowerCase(),sub=$('#searchSubject').value.trim().toLowerCase(),att=$('#searchHasAttachment').value;if(f)m=m.filter(x=>(x.from||'').toLowerCase().includes(f));if(t)m=m.filter(x=>(x.to||[]).join(' ').toLowerCase().includes(t));if(sub)m=m.filter(x=>(x.subject||'').toLowerCase().includes(sub));if(att==='yes')m=m.filter(x=>(x.attachments||[]).length);if(att==='no')m=m.filter(x=>!(x.attachments||[]).length);return m}
 function updateMobileSelectionBar(){document.body.classList.toggle('mobile-selection-active',state.selected.size>0);const sa=$('#selectAll');if(sa)sa.checked=filteredMessages().length>0&&filteredMessages().every(m=>state.selected.has(m.id))}
-function renderMessages(){const list=$('#messageList');list.innerHTML='';const msgs=filteredMessages();$('#folderLabel').textContent=folderNames[state.folder]||state.folder;for(const m of msgs){const card=document.createElement('div');card.className='message-card'+(!m.read?' unread':'')+(state.current?.id===m.id?' active':'');card.dataset.id=m.id;const nm=nameFromAddress(m.from||m.to?.[0]||'');card.innerHTML=`<input class="msg-check" type="checkbox" ${state.selected.has(m.id)?'checked':''}><div class="sender-avatar">${initials(nm).slice(0,2)}</div><div class="message-main"><div class="sender-line"><strong>${escapeHtml(nm)}</strong><time>${formatDate(m.date)}</time></div><div class="subject-line"><b>${escapeHtml(m.subject||'(sem assunto)')}</b>${(m.attachments||[]).length?' <span class="inline-mail-icon">'+mailIcon('paperclip',14)+'</span>':''}</div><div class="preview-line">${escapeHtml(stripHtml(m.body||''))}</div></div><button class="star-btn ${m.starred?'on':''}">${m.starred?'★':'☆'}</button>`;card.addEventListener('click',e=>{if(e.target.matches('.msg-check,.star-btn'))return;openMessage(m)});card.querySelector('.msg-check').onchange=e=>{e.target.checked?state.selected.add(m.id):state.selected.delete(m.id);updateMobileSelectionBar()};card.querySelector('.star-btn').onclick=()=>toggleStar(m);card.oncontextmenu=e=>showMessageContext(e,m);list.appendChild(card)}if(!msgs.length)list.innerHTML='<div class="empty-reader" style="height:240px"><div class="mail-illustration">⌕</div><h2>Nenhum e-mail</h2><p>Não encontramos mensagens nesta visualização.</p></div>';updateMobileSelectionBar()}
+function renderMessages(){const list=$('#messageList');list.innerHTML='';const msgs=filteredMessages();$('#folderLabel').textContent=folderNames[state.folder]||state.folder;for(const m of msgs){const card=document.createElement('div');card.className='message-card'+(!m.read?' unread':'')+(state.current?.id===m.id?' active':'');card.dataset.id=m.id;const nm=repairTextEncoding(nameFromAddress(m.from||m.to?.[0]||''));card.innerHTML=`<input class="msg-check" type="checkbox" ${state.selected.has(m.id)?'checked':''}><div class="sender-avatar">${initials(nm).slice(0,2)}</div><div class="message-main"><div class="sender-line"><strong>${escapeHtml(nm)}</strong><time>${formatDate(m.date)}</time></div><div class="subject-line"><b>${escapeHtml(repairTextEncoding(m.subject||'(sem assunto)'))}</b>${(m.attachments||[]).length?' <span class="inline-mail-icon">'+mailIcon('paperclip',14)+'</span>':''}</div><div class="preview-line">${escapeHtml(previewText(m.body||''))}</div></div><button class="star-btn ${m.starred?'on':''}">${m.starred?'★':'☆'}</button>`;card.addEventListener('click',e=>{if(e.target.matches('.msg-check,.star-btn'))return;openMessage(m)});card.querySelector('.msg-check').onchange=e=>{e.target.checked?state.selected.add(m.id):state.selected.delete(m.id);updateMobileSelectionBar()};card.querySelector('.star-btn').onclick=()=>toggleStar(m);card.oncontextmenu=e=>showMessageContext(e,m);list.appendChild(card)}if(!msgs.length)list.innerHTML='<div class="empty-reader" style="height:240px"><div class="mail-illustration">⌕</div><h2>Nenhum e-mail</h2><p>Não encontramos mensagens nesta visualização.</p></div>';updateMobileSelectionBar()}
 function escapeHtml(s=''){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 async function openMessage(m){state.current=m;if(!m.read){try{await api('/api/messages/'+m.id,{method:'PATCH',body:JSON.stringify({action:'read',value:true,folder:m.folder})});m.read=true;loadSummary()}catch{}}renderMessages();renderReader(m);if(innerWidth<820){$('#readerPane').classList.add('mobile-open');document.body.classList.add('mobile-reader-open')}}
-function renderReader(m){const nm=nameFromAddress(m.from||'');const reader=$('#readerPane');const at=(m.attachments||[]).map(a=>`<span class="attachment-chip attachment-open" role="button" tabindex="0" data-id="${escapeHtml(a.id||'')}" data-name="${escapeHtml(a.name||'anexo')}" title="Abrir ${escapeHtml(a.name||'anexo')}"><b>${(a.name||'FILE').split('.').pop().toUpperCase()}</b><span>${escapeHtml(a.name||'Anexo')}<small>${a.size?' · '+escapeHtml(formatBytes(Number(a.size))):''}</small></span><button class="attachment-download" data-id="${escapeHtml(a.id||'')}" data-name="${escapeHtml(a.name||'anexo')}" title="Baixar">${mailIcon('archive',15)}</button></span>`).join('');reader.innerHTML=`<button class="mobile-reader-back" type="button">← Voltar</button><div class="reader-head"><div class="reader-title"><h1>${escapeHtml(m.subject||'(sem assunto)')}</h1><span class="folder-pill">${escapeHtml(folderNames[m.folder]||m.folder||'')}</span></div><div class="reader-meta"><div class="sender-avatar">${initials(nm).slice(0,2)}</div><div><strong>${escapeHtml(nm)} <small style="display:inline">&lt;${escapeHtml(extractEmail(m.from||''))}&gt;</small></strong><small>para mim · ${new Date(m.date).toLocaleString('pt-BR')}</small></div><div class="reader-meta-actions"><button class="inlineStar">${m.starred?'★':'☆'}</button><button class="inlineReply">${mailIcon('reply',16)}</button><button class="inlineMore">${mailIcon('moreVertical',16)}</button></div></div></div><div class="reader-body">${normalizeBody(m.body)}</div>${at?`<div class="attachment-block"><strong>${m.attachments.length} anexo${m.attachments.length>1?'s':''}</strong><div style="margin-top:10px">${at}</div></div>`:''}`;reader.querySelector('.mobile-reader-back')?.addEventListener('click',()=>{reader.classList.remove('mobile-open');document.body.classList.remove('mobile-reader-open')});reader.querySelector('.inlineStar').onclick=()=>toggleStar(m);reader.querySelector('.inlineReply').onclick=()=>openCompose('reply',m);reader.querySelector('.inlineMore').onclick=e=>{e.stopPropagation();showReaderContext(e,m)};reader.querySelectorAll('.attachment-open').forEach(el=>{
+function renderReader(m){const nm=repairTextEncoding(nameFromAddress(m.from||''));const reader=$('#readerPane');const at=(m.attachments||[]).map(a=>`<span class="attachment-chip attachment-open" role="button" tabindex="0" data-id="${escapeHtml(a.id||'')}" data-name="${escapeHtml(a.name||'anexo')}" title="Abrir ${escapeHtml(a.name||'anexo')}"><b>${(a.name||'FILE').split('.').pop().toUpperCase()}</b><span>${escapeHtml(a.name||'Anexo')}<small>${a.size?' · '+escapeHtml(formatBytes(Number(a.size))):''}</small></span><button class="attachment-download" data-id="${escapeHtml(a.id||'')}" data-name="${escapeHtml(a.name||'anexo')}" title="Baixar">${mailIcon('archive',15)}</button></span>`).join('');reader.innerHTML=`<button class="mobile-reader-back" type="button">← Voltar</button><div class="reader-head"><div class="reader-title"><h1>${escapeHtml(m.subject||'(sem assunto)')}</h1><span class="folder-pill">${escapeHtml(folderNames[m.folder]||m.folder||'')}</span></div><div class="reader-meta"><div class="sender-avatar">${initials(nm).slice(0,2)}</div><div><strong>${escapeHtml(nm)} <small style="display:inline">&lt;${escapeHtml(extractEmail(m.from||''))}&gt;</small></strong><small>para mim · ${new Date(m.date).toLocaleString('pt-BR')}</small></div><div class="reader-meta-actions"><button class="inlineStar">${m.starred?'★':'☆'}</button><button class="inlineReply">${mailIcon('reply',16)}</button><button class="inlineMore">${mailIcon('moreVertical',16)}</button></div></div></div><div class="reader-body">${normalizeBody(m.body)}</div>${at?`<div class="attachment-block"><strong>${m.attachments.length} anexo${m.attachments.length>1?'s':''}</strong><div style="margin-top:10px">${at}</div></div>`:''}`;reader.querySelector('.mobile-reader-back')?.addEventListener('click',()=>{reader.classList.remove('mobile-open');document.body.classList.remove('mobile-reader-open')});reader.querySelector('.inlineStar').onclick=()=>toggleStar(m);reader.querySelector('.inlineReply').onclick=()=>openCompose('reply',m);reader.querySelector('.inlineMore').onclick=e=>{e.stopPropagation();showReaderContext(e,m)};reader.querySelectorAll('.attachment-open').forEach(el=>{
     el.addEventListener('click',e=>{if(e.target.closest('.attachment-download'))return;openAttachment(el.dataset.id,el.dataset.name)});
     el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openAttachment(el.dataset.id,el.dataset.name)}})
   });
@@ -189,8 +222,9 @@ function sanitizeEmailHtml(html=''){
   }catch{return escapeHtml(String(html))}
 }
 function normalizeBody(body=''){
-  if(/<\w+/.test(body))return sanitizeEmailHtml(body);
-  return body.split(/\n{2,}/).map(p=>`<p>${escapeHtml(p).replace(/\n/g,'<br>')}</p>`).join('')
+  const cleaned=cleanMailMarkup(body);
+  if(/<\w+/.test(cleaned))return sanitizeEmailHtml(cleaned);
+  return repairTextEncoding(cleaned).split(/\n{2,}/).map(p=>`<p>${escapeHtml(p).replace(/\n/g,'<br>')}</p>`).join('')
 }
 async function fetchAttachmentBlob(id){
   const r=await fetch(API_ROOT+'/api/attachments/'+encodeURIComponent(id),{headers:{Authorization:'Bearer '+state.token}});
