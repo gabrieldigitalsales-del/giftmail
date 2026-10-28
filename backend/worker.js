@@ -32,13 +32,13 @@ function decodeBytes(bytes,charset='utf-8'){
 function binaryStringToBytes(s=''){const out=new Uint8Array(String(s).length);for(let i=0;i<out.length;i++)out[i]=String(s).charCodeAt(i)&255;return out}
 function bytesToBinaryString(bytes){let out='';for(let i=0;i<bytes.length;i+=0x8000)out+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return out}
 function decodeMimeWord(value=''){
-  const src=String(value||'');
+  const src=String(value||'').replace(/\?=\s+=\?/g,'?==?');
   return src.replace(/=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/g,(_,cs,enc,data)=>{try{
     const bytes=enc.toUpperCase()==='B'
       ?b64ToBytes(String(data).replace(/\s/g,''))
       :binaryStringToBytes(String(data).replace(/_/g,' ').replace(/=([0-9A-F]{2})/gi,(_,h)=>String.fromCharCode(parseInt(h,16))));
     return decodeBytes(bytes,cs);
-  }catch{return data}}).replace(/\?=\s+=\?/g,'?==?');
+  }catch{return data}});
 }
 function parseHeaders(raw=''){
   const idx=raw.search(/\r?\n\r?\n/); const head=idx>=0?raw.slice(0,idx):raw;
@@ -68,10 +68,17 @@ function decodeBodyPart(body,cte='',contentType=''){
     return decodeBytes(bytes,charset);
   }catch{return String(body)}
 }
+function percentToBytes(s=''){
+  const out=[];for(let i=0;i<String(s).length;i++){
+    if(s[i]==='%'&&/^[0-9A-Fa-f]{2}$/.test(s.slice(i+1,i+3))){out.push(parseInt(s.slice(i+1,i+3),16));i+=2}
+    else out.push(s.charCodeAt(i)&255)
+  }
+  return new Uint8Array(out)
+}
 function decodeParamValue(v=''){
   let value=String(v).trim().replace(/^"|"$/g,'');
   const star=value.match(/^([^']*)'[^']*'(.*)$/);
-  if(star){try{return decodeBytes(Uint8Array.from(decodeURIComponent(star[2]).split('').map(c=>c.charCodeAt(0))),star[1]||'utf-8')}catch{}}
+  if(star){try{return decodeBytes(percentToBytes(star[2]),star[1]||'utf-8')}catch{}}
   try{value=decodeURIComponent(value)}catch{}
   return decodeMimeWord(value);
 }
@@ -126,7 +133,7 @@ async function saveAttachment(env,messageId,a){
   else if(a.raw){
     if(/base64/i.test(a.cte||''))bytes=b64ToBytes(String(a.raw).replace(/\s/g,''));
     else if(/quoted-printable/i.test(a.cte||''))bytes=qpToBytes(a.raw);
-    else bytes=new TextEncoder().encode(String(a.raw));
+    else bytes=binaryStringToBytes(a.raw);
   } else return;
   await env.ATTACHMENTS.put(key,bytes,{httpMetadata:{contentType:a.contentType||'application/octet-stream'}});
   await env.DB.prepare(`INSERT INTO giftmail_attachments(id,message_id,filename,content_type,size_bytes,r2_key) VALUES(?,?,?,?,?,?)`).bind(id,messageId,a.name||a.filename||'arquivo',a.contentType||'application/octet-stream',bytes.byteLength,key).run();
