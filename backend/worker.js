@@ -15,6 +15,41 @@ async function hashPassword(password,saltB64){
 }
 const newId=(p='m')=>p+crypto.randomUUID().replace(/-/g,'');
 function logEvent(event,data={}){try{console.log(JSON.stringify({event,ts:new Date().toISOString(),...data}))}catch{}}
+async function auditEvent(env,userId,event,meta={}){
+  try{await env.DB.prepare(`INSERT INTO giftmail_audit_logs(id,user_id,event,meta_json) VALUES(?,?,?,?)`).bind(newId('log'),userId||null,event,JSON.stringify(meta||{})).run()}catch(e){console.error('audit',e.message)}
+}
+function requestIp(req){return req.headers.get('CF-Connecting-IP')||req.headers.get('x-forwarded-for')||''}
+async function loginAttemptKey(email,ip){return sha256(String(email||'').trim().toLowerCase()+'|'+String(ip||''))}
+async function checkLoginBlocked(env,key){
+  const r=await env.DB.prepare(`SELECT failures,window_start,blocked_until FROM giftmail_login_attempts WHERE attempt_key=?`).bind(key).first();
+  if(!r)return false;
+  return !!(r.blocked_until&&new Date(r.blocked_until).getTime()>Date.now());
+}
+async function recordLoginFailure(env,key){
+  const now=Date.now(),row=await env.DB.prepare(`SELECT * FROM giftmail_login_attempts WHERE attempt_key=?`).bind(key).first();
+  let failures=1,windowStart=new Date(now).toISOString(),blockedUntil=null;
+  if(row&&new Date(row.window_start).getTime()>now-15*60*1000){failures=Number(row.failures||0)+1;windowStart=row.window_start}else failures=1;
+  if(failures>=5)blockedUntil=new Date(now+15*60*1000).toISOString();
+  await env.DB.prepare(`INSERT INTO giftmail_login_attempts(attempt_key,failures,window_start,blocked_until,updated_at) VALUES(?,?,?,?,datetime('now'))
+    ON CONFLICT(attempt_key) DO UPDATE SET failures=excluded.failures,window_start=excluded.window_start,blocked_until=excluded.blocked_until,updated_at=datetime('now')`)
+    .bind(key,failures,windowStart,blockedUntil).run();
+}
+async function clearLoginFailures(env,key){await env.DB.prepare(`DELETE FROM giftmail_login_attempts WHERE attempt_key=?`).bind(key).run()}
+async function createNotification(env,userId,messageId,title,body){
+  await env.DB.prepare(`INSERT INTO giftmail_notifications(id,user_id,message_id,type,title,body) VALUES(?,?,?,?,?,?)`)
+    .bind(newId('n'),userId,messageId,'new_message',String(title||'Novo e-mail').slice(0,180),String(body||'').slice(0,240)).run();
+}
+async function verifyResendWebhook(req,env,rawBody){
+  const secret=env.RESEND_WEBHOOK_SECRET;if(!secret)return false;
+  const id=req.headers.get('svix-id')||'',ts=req.headers.get('svix-timestamp')||'',sig=req.headers.get('svix-signature')||'';
+  if(!id||!ts||!sig||Math.abs(Date.now()/1000-Number(ts))>300)return false;
+  const keyRaw=String(secret).replace(/^whsec_/,'');
+  let key;try{key=b64ToBytes(keyRaw)}catch{return false}
+  const cryptoKey=await crypto.subtle.importKey('raw',key,{name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const mac=new Uint8Array(await crypto.subtle.sign('HMAC',cryptoKey,new TextEncoder().encode(id+'.'+ts+'.'+rawBody)));
+  const expected=bytesToB64(mac);
+  return sig.split(' ').some(part=>part.startsWith('v1,')&&part.slice(3)===expected);
+}
 function safeJson(s,f=[]){try{return JSON.parse(s||'')}catch{return f}}
 function stripHtml(s=''){return String(s).replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim()}
 function normalizeCharset(cs='utf-8'){
@@ -124,7 +159,7 @@ async function attachmentsFor(env,messageId){
   const {results=[]}=await env.DB.prepare(`SELECT id,filename,content_type,size_bytes,r2_key FROM giftmail_attachments WHERE message_id=? ORDER BY created_at`).bind(messageId).all();
   return results.map(a=>({id:a.id,name:a.filename,size:a.size_bytes,contentType:a.content_type,url:`/api/attachments/${a.id}`}));
 }
-async function rowToMessage(env,r){return {id:r.id,folder:r.folder,from:r.from_address,to:safeJson(r.to_json),cc:safeJson(r.cc_json),bcc:safeJson(r.bcc_json),subject:r.subject,body:r.body_html||r.body_text,date:r.sent_at||r.created_at,read:!!r.read_flag,starred:!!r.starred,labels:safeJson(r.labels_json),scheduledAt:r.scheduled_at,attachments:await attachmentsFor(env,r.id)}}
+async function rowToMessage(env,r){return {id:r.id,folder:r.folder,from:r.from_address,to:safeJson(r.to_json),cc:safeJson(r.cc_json),bcc:safeJson(r.bcc_json),subject:r.subject,body:r.body_html||r.body_text,date:r.sent_at||r.created_at,read:!!r.read_flag,starred:!!r.starred,labels:safeJson(r.labels_json),scheduledAt:r.scheduled_at,deliveryStatus:r.delivery_status||'',deliveryDetail:r.delivery_detail||'',deliveredAt:r.delivered_at||null,attachments:await attachmentsFor(env,r.id)}}
 async function saveAttachment(env,messageId,a){
   const id=newId('a'),key=`${messageId}/${id}-${String(a.name||a.filename||'file').replace(/[^a-zA-Z0-9._-]/g,'_')}`;
   let bytes;
@@ -166,10 +201,10 @@ async function sendViaResend(env,user,payload,save=true){
   const atts=resolved.map(a=>({filename:a.filename,content:a.content}));
   const req={from:`${settings?.display_name||user.display_name||'GIFT Excellence'} <${user.email}>`,to,cc:payload.cc||[],bcc:payload.bcc||[],subject:payload.subject||'(sem assunto)',html:payload.html||payload.body||'',attachments:atts};
   const rr=await fetch('https://api.resend.com/emails',{method:'POST',headers:{authorization:`Bearer ${env.RESEND_API_KEY}`,'content-type':'application/json'},body:JSON.stringify(req)});
-  const data=await rr.json().catch(()=>({})); if(!rr.ok){logEvent('send_failed',{user:user.email,status:rr.status,message:data.message||''});throw new Error(data.message||'Falha ao enviar e-mail')} logEvent('send_ok',{user:user.email,toCount:to.length,attachments:atts.length});
+  const data=await rr.json().catch(()=>({})); if(!rr.ok){logEvent('send_failed',{user:user.email,status:rr.status,message:data.message||''});await auditEvent(env,user.id,'send_failed',{status:rr.status});throw new Error(data.message||'Falha ao enviar e-mail')} logEvent('send_ok',{user:user.email,toCount:to.length,attachments:atts.length});await auditEvent(env,user.id,'send_ok',{providerId:data.id||'',toCount:to.length,attachments:atts.length});
   if(save){
     const id=newId();
-    await env.DB.prepare(`INSERT INTO giftmail_messages(id,owner_user_id,folder,from_address,to_json,cc_json,bcc_json,subject,body_html,body_text,message_id,read_flag,sent_at,created_at,raw_size) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'),?)`).bind(id,user.id,'sent',user.email,JSON.stringify(to),JSON.stringify(payload.cc||[]),JSON.stringify(payload.bcc||[]),payload.subject||'(sem assunto)',payload.html||'',stripHtml(payload.html||''),data.id||'',1,JSON.stringify(payload).length).run();
+    await env.DB.prepare(`INSERT INTO giftmail_messages(id,owner_user_id,folder,from_address,to_json,cc_json,bcc_json,subject,body_html,body_text,message_id,read_flag,sent_at,created_at,raw_size,delivery_status,last_status_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'),?,'accepted',datetime('now'))`).bind(id,user.id,'sent',user.email,JSON.stringify(to),JSON.stringify(payload.cc||[]),JSON.stringify(payload.bcc||[]),payload.subject||'(sem assunto)',payload.html||'',stripHtml(payload.html||''),data.id||'',1,JSON.stringify(payload).length).run();
     for(const a of resolved)await saveAttachment(env,id,{name:a.filename,contentType:a.contentType,bytes:a.bytes});
   }
   return data;
@@ -179,8 +214,8 @@ async function processScheduled(env){
   for(const r of results){
     try{
       const attachments=await attachmentsFor(env,r.id);
-      await sendViaResend(env,{id:r.owner_user_id,email:r.email,display_name:r.display_name,role:r.role},{to:safeJson(r.to_json),cc:safeJson(r.cc_json),bcc:safeJson(r.bcc_json),subject:r.subject,html:r.body_html,attachments},false);
-      await env.DB.prepare(`UPDATE giftmail_messages SET folder='sent',sent_at=datetime('now') WHERE id=?`).bind(r.id).run()
+      const sent=await sendViaResend(env,{id:r.owner_user_id,email:r.email,display_name:r.display_name,role:r.role},{to:safeJson(r.to_json),cc:safeJson(r.cc_json),bcc:safeJson(r.bcc_json),subject:r.subject,html:r.body_html,attachments},false);
+      await env.DB.prepare(`UPDATE giftmail_messages SET folder='sent',sent_at=datetime('now'),message_id=?,delivery_status='accepted',last_status_at=datetime('now') WHERE id=?`).bind(sent?.id||'',r.id).run()
     }catch(e){console.log('scheduled send failed',r.id,e.message)}
   }
 }
@@ -188,6 +223,21 @@ async function api(req,env){
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:CORS});
   const url=new URL(req.url),p=url.pathname;
   if(p==='/api/health')return json({ok:true,service:'giftmail-api'});
+  if(p==='/api/webhooks/resend'&&req.method==='POST'){
+    const rawBody=await req.text();
+    if(!(await verifyResendWebhook(req,env,rawBody)))return json({error:'Assinatura inválida'},401);
+    let event;try{event=JSON.parse(rawBody)}catch{return json({error:'Payload inválido'},400)}
+    const type=String(event.type||''),data=event.data||{},providerId=data.email_id||data.id||'';
+    const map={'email.sent':'sent','email.delivered':'delivered','email.bounced':'bounced','email.failed':'failed','email.delivery_delayed':'delayed','email.complained':'complained','email.suppressed':'suppressed'};
+    const status=map[type];
+    if(providerId&&status){
+      const detail=String(data.bounce?.message||data.failed?.message||data.reason||'').slice(0,500);
+      await env.DB.prepare(`UPDATE giftmail_messages SET delivery_status=?,delivery_detail=?,last_status_at=datetime('now'),delivered_at=CASE WHEN ?='delivered' THEN datetime('now') ELSE delivered_at END WHERE message_id=?`)
+        .bind(status,detail,status,providerId).run();
+      logEvent('delivery_status',{providerId,status});
+    }
+    return json({ok:true})
+  }
   const publicSig=p.match(/^\/api\/public\/signature-logo\/(\d+)$/);
   if(publicSig&&req.method==='GET'){
     const st=await env.DB.prepare(`SELECT signature_logo_key FROM giftmail_settings WHERE user_id=?`).bind(Number(publicSig[1])).first();
@@ -197,23 +247,79 @@ async function api(req,env){
     const h=new Headers(CORS);h.set('content-type',obj.httpMetadata?.contentType||'image/png');h.set('cache-control','public, max-age=3600');return new Response(obj.body,{headers:h});
   }
   if(p==='/api/auth/login'&&req.method==='POST'){
-    const {email='',password=''}=await req.json();const u=await env.DB.prepare(`SELECT * FROM giftmail_users WHERE lower(email)=lower(?) AND active=1`).bind(email.trim()).first();
-    if(!u)return json({error:'E-mail ou senha incorretos'},401);
+    const {email='',password=''}=await req.json(),ip=requestIp(req),attemptKey=await loginAttemptKey(email,ip);
+    if(await checkLoginBlocked(env,attemptKey))return json({error:'Muitas tentativas. Tente novamente em 15 minutos.'},429);
+    const u=await env.DB.prepare(`SELECT * FROM giftmail_users WHERE lower(email)=lower(?) AND active=1`).bind(email.trim()).first();
+    if(!u){await recordLoginFailure(env,attemptKey);await auditEvent(env,null,'login_failed',{email:String(email).toLowerCase(),ip});return json({error:'E-mail ou senha incorretos'},401)}
     const h=await hashPassword(password,u.password_salt);
     const legacyHashes=new Set([
-      'zOwrH3DtTjmnXEcu1DB+Y52h5ZFBac70Z2WQZ8uB7cM=',
-      'LkytQPI7eHAOh6tCj7s17e/pfmkIKp0UviqT0d4fZpo=',
-      'V0qLIrziyfEMQTXb91RPmg6Rb+C7TcoeEQBKuj63mR4=',
-      'cG3EyMkeplYDDBqZ/QLubDBVub7uZf60RDnNtdHYF1A=',
-      'oDzW6Vk/XdgC9X5HJPggwycgTPYbo+NWkPNcpkx3wvQ='
+      'zOwrH3DtTjmnXEcu1DB+Y52h5ZFBac70Z2WQZ8uB7cM=','LkytQPI7eHAOh6tCj7s17e/pfmkIKp0UviqT0d4fZpo=',
+      'V0qLIrziyfEMQTXb91RPmg6Rb+C7TcoeEQBKuj63mR4=','cG3EyMkeplYDDBqZ/QLubDBVub7uZf60RDnNtdHYF1A=','oDzW6Vk/XdgC9X5HJPggwycgTPYbo+NWkPNcpkx3wvQ='
     ]);
     if(h!==u.password_hash){
-      if(!(legacyHashes.has(u.password_hash)&&password==='asd123'))return json({error:'E-mail ou senha incorretos'},401);
+      if(!(legacyHashes.has(u.password_hash)&&password==='asd123')){await recordLoginFailure(env,attemptKey);await auditEvent(env,u.id,'login_failed',{ip});return json({error:'E-mail ou senha incorretos'},401)}
       await env.DB.prepare(`UPDATE giftmail_users SET password_hash=?,updated_at=datetime('now') WHERE id=?`).bind(h,u.id).run();
     }
-    const raw=crypto.randomUUID()+crypto.randomUUID(),th=await sha256(raw),exp=new Date(Date.now()+7*86400000).toISOString();await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE expires_at<=datetime('now')`).run();await env.DB.prepare(`INSERT INTO giftmail_sessions(token_hash,user_id,expires_at) VALUES(?,?,?)`).bind(th,u.id,exp).run();return json({token:raw,demo:false,user:{email:u.email,name:u.display_name,role:u.role}});
+    await clearLoginFailures(env,attemptKey);
+    const raw=crypto.randomUUID()+crypto.randomUUID(),th=await sha256(raw),exp=new Date(Date.now()+7*86400000).toISOString(),ua=String(req.headers.get('user-agent')||'').slice(0,300);
+    await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE expires_at<=datetime('now')`).run();
+    await env.DB.prepare(`INSERT INTO giftmail_sessions(token_hash,user_id,expires_at,ip,user_agent,last_seen_at) VALUES(?,?,?,?,?,datetime('now'))`).bind(th,u.id,exp,ip,ua).run();
+    await auditEvent(env,u.id,'login_success',{ip,userAgent:ua});
+    return json({token:raw,demo:false,user:{email:u.email,name:u.display_name,role:u.role}})
   }
   const user=await auth(req,env); if(!user)return json({error:'Sessão expirada'},401);
+  if(p==='/api/notifications'&&req.method==='GET'){
+    const {results=[]}=await env.DB.prepare(`SELECT n.id,n.message_id,n.type,n.title,n.body,n.read_flag,n.created_at,m.folder FROM giftmail_notifications n LEFT JOIN giftmail_messages m ON m.id=n.message_id WHERE n.user_id=? ORDER BY n.created_at DESC LIMIT 30`).bind(user.id).all();
+    const unread=results.reduce((n,r)=>n+(r.read_flag?0:1),0);return json({items:results.map(r=>({...r,read:!!r.read_flag})),unread})
+  }
+  if(p==='/api/notifications/read'&&req.method==='POST'){
+    const b=await req.json().catch(()=>({}));if(b.id)await env.DB.prepare(`UPDATE giftmail_notifications SET read_flag=1 WHERE id=? AND user_id=?`).bind(b.id,user.id).run();
+    else await env.DB.prepare(`UPDATE giftmail_notifications SET read_flag=1 WHERE user_id=?`).bind(user.id).run();return json({ok:true})
+  }
+  if(p==='/api/sessions'&&req.method==='GET'){
+    const raw=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,''),current=await sha256(raw);
+    const {results=[]}=await env.DB.prepare(`SELECT token_hash,created_at,expires_at,ip,user_agent,last_seen_at FROM giftmail_sessions WHERE user_id=? ORDER BY created_at DESC`).bind(user.id).all();
+    return json(results.map(r=>({createdAt:r.created_at,expiresAt:r.expires_at,ip:r.ip||'',userAgent:r.user_agent||'',lastSeenAt:r.last_seen_at||'',current:r.token_hash===current})))
+  }
+  if(p==='/api/admin/users'&&req.method==='GET'){
+    if(user.role!=='admin')return json({error:'Acesso negado'},403);
+    const {results=[]}=await env.DB.prepare(`SELECT u.id,u.email,u.display_name,u.role,u.active,u.created_at,u.updated_at,
+      (SELECT COUNT(*) FROM giftmail_messages m WHERE m.owner_user_id=u.id) message_count,
+      (SELECT COUNT(*) FROM giftmail_sessions s WHERE s.user_id=u.id AND s.expires_at>datetime('now')) active_sessions
+      FROM giftmail_users u ORDER BY u.email`).all();return json(results)
+  }
+  if(p==='/api/admin/users'&&req.method==='POST'){
+    if(user.role!=='admin')return json({error:'Acesso negado'},403);
+    const b=await req.json(),email=String(b.email||'').trim().toLowerCase(),name=String(b.displayName||'').trim(),password=String(b.password||'');
+    if(!/^[^@\s]+@giftexcellence\.com\.br$/i.test(email))return json({error:'Use um e-mail @giftexcellence.com.br'},400);
+    if(!name||password.length<6)return json({error:'Informe nome e senha temporária com pelo menos 6 caracteres'},400);
+    const salt=crypto.getRandomValues(new Uint8Array(16)),sb=bytesToB64(salt),hh=await hashPassword(password,sb);
+    try{
+      const res=await env.DB.prepare(`INSERT INTO giftmail_users(email,display_name,role,password_salt,password_hash) VALUES(?,?,?,?,?)`).bind(email,name,b.role==='admin'?'admin':'user',sb,hh).run();
+      const id=res.meta?.last_row_id;await env.DB.prepare(`INSERT OR IGNORE INTO giftmail_settings(user_id,display_name,signature_name) VALUES(?,?,?)`).bind(id,name,name).run();
+      await auditEvent(env,user.id,'admin_user_created',{target:email,role:b.role==='admin'?'admin':'user'});return json({ok:true,id})
+    }catch{return json({error:'E-mail já cadastrado'},409)}
+  }
+  const adminUser=p.match(/^\/api\/admin\/users\/(\d+)$/);
+  if(adminUser&&req.method==='PATCH'){
+    if(user.role!=='admin')return json({error:'Acesso negado'},403);const id=Number(adminUser[1]),b=await req.json();
+    if(id===user.id&&b.active===false)return json({error:'Você não pode desativar sua própria conta'},400);
+    await env.DB.prepare(`UPDATE giftmail_users SET display_name=COALESCE(?,display_name),role=COALESCE(?,role),active=COALESCE(?,active),updated_at=datetime('now') WHERE id=?`)
+      .bind(b.displayName??null,b.role==null?null:(b.role==='admin'?'admin':'user'),b.active==null?null:(b.active?1:0),id).run();
+    await auditEvent(env,user.id,'admin_user_updated',{targetId:id});return json({ok:true})
+  }
+  const resetUser=p.match(/^\/api\/admin\/users\/(\d+)\/reset-password$/);
+  if(resetUser&&req.method==='POST'){
+    if(user.role!=='admin')return json({error:'Acesso negado'},403);const b=await req.json(),password=String(b.password||'');if(password.length<6)return json({error:'Senha mínima de 6 caracteres'},400);
+    const id=Number(resetUser[1]),salt=crypto.getRandomValues(new Uint8Array(16)),sb=bytesToB64(salt),hh=await hashPassword(password,sb);
+    await env.DB.prepare(`UPDATE giftmail_users SET password_salt=?,password_hash=?,updated_at=datetime('now') WHERE id=?`).bind(sb,hh,id).run();
+    await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE user_id=?`).bind(id).run();await auditEvent(env,user.id,'admin_password_reset',{targetId:id});return json({ok:true})
+  }
+  if(p==='/api/admin/audit'&&req.method==='GET'){
+    if(user.role!=='admin')return json({error:'Acesso negado'},403);
+    const {results=[]}=await env.DB.prepare(`SELECT l.id,l.event,l.meta_json,l.created_at,u.email FROM giftmail_audit_logs l LEFT JOIN giftmail_users u ON u.id=l.user_id ORDER BY l.created_at DESC LIMIT 100`).all();
+    return json(results.map(r=>({...r,meta:safeJson(r.meta_json,{})})))
+  }
   if(p==='/api/signature-logo'&&req.method==='POST'){
     const b=await req.json(),data=String(b.data||''),m=data.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/i);
     if(!m)return json({error:'Envie uma imagem PNG, JPG ou WEBP'},400);
@@ -231,16 +337,34 @@ async function api(req,env){
     await env.DB.prepare(`UPDATE giftmail_settings SET signature_logo_key='',updated_at=datetime('now') WHERE user_id=?`).bind(user.id).run();
     return json({ok:true,url:'https://giftmail.vercel.app/assets/gift-logo.png'});
   }
-  if(p==='/api/auth/logout'&&req.method==='POST'){const raw=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE token_hash=?`).bind(await sha256(raw)).run();return json({ok:true})}
+  if(p==='/api/auth/logout'&&req.method==='POST'){const raw=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE token_hash=?`).bind(await sha256(raw)).run();await auditEvent(env,user.id,'logout',{});return json({ok:true})}
   if(p==='/api/auth/logout-others'&&req.method==='POST'){const raw=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,''),current=await sha256(raw);await env.DB.prepare(`DELETE FROM giftmail_sessions WHERE user_id=? AND token_hash<>?`).bind(user.id,current).run();return json({ok:true})}
   if(p==='/api/summary'&&req.method==='GET'){
     const {results=[]}=await env.DB.prepare(`SELECT folder,COUNT(*) c,SUM(CASE WHEN read_flag=0 THEN 1 ELSE 0 END) unread,SUM(CASE WHEN starred=1 THEN 1 ELSE 0 END) starred FROM giftmail_messages WHERE owner_user_id=? GROUP BY folder`).bind(user.id).all();const out={inbox:0,unread:0,starred:0,sent:0,drafts:0,scheduled:0,archive:0,spam:0,trash:0};for(const r of results){out[r.folder]=r.c;if(r.folder==='inbox')out.unread=r.unread||0;out.starred+=r.starred||0}return json(out)
   }
   if(p==='/api/messages'&&req.method==='GET'){
-    const folder=url.searchParams.get('folder')||'inbox',q=(url.searchParams.get('q')||'').trim(); let stmt,binds;
-    if(folder==='starred'){stmt=`SELECT * FROM giftmail_messages WHERE owner_user_id=? AND starred=1 AND folder<>'trash'`;binds=[user.id]}else{stmt=`SELECT * FROM giftmail_messages WHERE owner_user_id=? AND folder=?`;binds=[user.id,folder]}
-    if(q){stmt+=` AND (lower(from_address) LIKE ? OR lower(subject) LIKE ? OR lower(body_text) LIKE ? OR lower(to_json) LIKE ?)`;const like='%'+q.toLowerCase()+'%';binds.push(like,like,like,like)} stmt+=` ORDER BY COALESCE(sent_at,created_at) DESC LIMIT 500`;
-    const {results=[]}=await env.DB.prepare(stmt).bind(...binds).all();const out=[];for(const r of results)out.push(await rowToMessage(env,r));return json(out)
+    const folder=url.searchParams.get('folder')||'inbox',q=(url.searchParams.get('q')||'').trim(),
+      from=(url.searchParams.get('from')||'').trim(),to=(url.searchParams.get('to')||'').trim(),
+      subject=(url.searchParams.get('subject')||'').trim(),hasAttachment=url.searchParams.get('hasAttachment')||'',
+      startDate=url.searchParams.get('startDate')||'',endDate=url.searchParams.get('endDate')||'',
+      paged=url.searchParams.get('paged')==='1',page=Math.max(0,Number(url.searchParams.get('page')||0)),
+      limit=Math.max(20,Math.min(100,Number(url.searchParams.get('limit')||50)));
+    let stmt,binds;
+    if(folder==='starred'){stmt=`SELECT * FROM giftmail_messages WHERE owner_user_id=? AND starred=1 AND folder<>'trash'`;binds=[user.id]}
+    else{stmt=`SELECT * FROM giftmail_messages WHERE owner_user_id=? AND folder=?`;binds=[user.id,folder]}
+    const addLike=(field,val)=>{if(val){stmt+=` AND lower(${field}) LIKE ?`;binds.push('%'+val.toLowerCase()+'%')}};
+    if(q){stmt+=` AND (lower(from_address) LIKE ? OR lower(subject) LIKE ? OR lower(body_text) LIKE ? OR lower(to_json) LIKE ?)`;const like='%'+q.toLowerCase()+'%';binds.push(like,like,like,like)}
+    addLike('from_address',from);addLike('to_json',to);addLike('subject',subject);
+    if(startDate){stmt+=` AND date(COALESCE(sent_at,created_at))>=date(?)`;binds.push(startDate)}
+    if(endDate){stmt+=` AND date(COALESCE(sent_at,created_at))<=date(?)`;binds.push(endDate)}
+    if(hasAttachment==='yes')stmt+=` AND EXISTS(SELECT 1 FROM giftmail_attachments a WHERE a.message_id=giftmail_messages.id)`;
+    if(hasAttachment==='no')stmt+=` AND NOT EXISTS(SELECT 1 FROM giftmail_attachments a WHERE a.message_id=giftmail_messages.id)`;
+    stmt+=` ORDER BY COALESCE(sent_at,created_at) DESC`;
+    if(paged){stmt+=` LIMIT ? OFFSET ?`;binds.push(limit+1,page*limit)}else stmt+=` LIMIT 500`;
+    const {results=[]}=await env.DB.prepare(stmt).bind(...binds).all();
+    const hasMore=paged&&results.length>limit,rows=hasMore?results.slice(0,limit):results,out=[];
+    for(const r of rows)out.push(await rowToMessage(env,r));
+    return paged?json({items:out,page,hasMore}):json(out)
   }
   if(p==='/api/messages'&&req.method==='POST'){
     const b=await req.json(),id=newId();
@@ -340,6 +464,7 @@ async function inbound(message,env){
     VALUES(?,?,?,?,?,?,?,?,?,0,?,?,datetime('now'),?)`)
     .bind(id,u.id,folder,from,JSON.stringify([recipient]),subject,parsed.html||'',parsed.text||'',h['message-id']||'',starred,JSON.stringify(labels),rawBytes.byteLength).run();
   for(const a of parsed.attachments)await saveAttachment(env,id,a);
+  if(folder==='inbox'){await createNotification(env,u.id,id,from,subject);await auditEvent(env,u.id,'message_received',{messageId:id,from:sender})}
 
   const attachments=await attachmentsFor(env,id);
   if(folder!=='spam'&&st?.forward_enabled&&st?.forward_address){
